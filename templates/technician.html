@@ -11,7 +11,7 @@
         input, select { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
         button { background: #16a34a; color: white; border: none; padding: 12px; width: 100%; border-radius: 6px; font-size: 16px; cursor: pointer; margin-top: 20px; font-weight: bold; }
         button:hover { background: #15803d; }
-        .back-link { display: block; text-align: center; margin-top: 15px; color: #64748b; text-decoration: none; }
+        .logout-link { display: block; text-align: center; margin-top: 15px; color: #dc2626; text-decoration: none; font-weight: bold; }
         .user-info { background: #e2e8f0; padding: 10px; border-radius: 6px; margin-bottom: 20px; text-align: center; font-weight: bold; color: #1e293b; }
     </style>
 </head>
@@ -19,13 +19,12 @@
     <div class="container">
         {% if user %}
         <div class="user-info">
-            مرحباً بك، {{ user.name }} (جهاز: {{ user.modality }})
+            مرحباً بك، {{ user.name }}
         </div>
         {% endif %}
         
         <h2>لوحة فني الأشعة - رفع صور المريض</h2>
         
-        <!-- تأكد أن action هنا يطابق تماماً /technician/upload الموجود في الـ main.py -->
         <form action="/technician/upload" method="post" enctype="multipart/form-data">
             <label>اسم المريض:</label>
             <input type="text" name="patient_name" required>
@@ -33,13 +32,21 @@
             <label>تاريخ الولادة:</label>
             <input type="date" name="birth_date" required>
             
+            <label>نوع الفحص / الجهاز (Modality):</label>
+            <select name="modality" required>
+                <option value="CT">الطبقي المحوري (CT)</option>
+                <option value="MRI">الرنين المغناطيسي (MRI)</option>
+                <option value="X-Ray">الأشعة السينية (X-Ray)</option>
+                <option value="Echo">الإيكو (Echo)</option>
+            </select>
+            
             <label>ملف الصورة (أشعة / DICOM / صورة عادية):</label>
             <input type="file" name="file" required>
             
             <button type="submit">رفع الصورة وتوليد الـ QR</button>
         </form>
         
-        <a href="/logout" class="back-link">تسجيل الخروج</a>
+        <a href="/logout" class="logout-link">تسجيل الخروج</a>
     </div>
 </body>
 </html>
