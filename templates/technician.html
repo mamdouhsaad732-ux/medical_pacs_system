@@ -2,69 +2,44 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>لوحة الفني - {{ user.name }}</title>
+    <title>لوحة الفني - رفع صور الأشعة</title>
     <style>
-        body { font-family: Tahoma, sans-serif; background: #f4f6f9; padding: 20px; direction: rtl; }
-        .container { max-width: 1000px; margin: auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
-        .logout-btn { background: #dc3545; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px; font-weight: bold; }
-        form { background: #e9ecef; padding: 20px; border-radius: 6px; display: flex; gap: 15px; align-items: center; margin-bottom: 25px; flex-wrap: wrap; }
-        input, button { padding: 10px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; flex: 1; min-width: 180px; }
-        button { background: #28a745; color: white; border: none; font-weight: bold; cursor: pointer; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; vertical-align: middle; }
-        th { background: #28a745; color: white; }
-        .img-preview { width: 60px; height: 60px; object-fit: cover; border-radius: 4px; cursor: zoom-in; transition: transform 0.3s; }
-        .img-preview.zoomed { transform: scale(2.5); cursor: zoom-out; z-index: 99; position: relative; }
+        body { font-family: Tahoma, sans-serif; background: #f8fafc; margin: 0; padding: 20px; }
+        .container { max-width: 600px; background: white; margin: 40px auto; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        h2 { color: #1e3a8a; text-align: center; }
+        label { display: block; margin-top: 15px; font-weight: bold; color: #334155; }
+        input, select { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
+        button { background: #16a34a; color: white; border: none; padding: 12px; width: 100%; border-radius: 6px; font-size: 16px; cursor: pointer; margin-top: 20px; font-weight: bold; }
+        button:hover { background: #15803d; }
+        .back-link { display: block; text-align: center; margin-top: 15px; color: #64748b; text-decoration: none; }
+        .user-info { background: #e2e8f0; padding: 10px; border-radius: 6px; margin-bottom: 20px; text-align: center; font-weight: bold; color: #1e293b; }
     </style>
-    <script>
-        function confirmUpload() {
-            return confirm("هل أنت متأكد من صحة بيانات المريض وتاريخ ولادته ونوع الصورة قبل رفعها وتوليد الـ QR؟");
-        }
-        function toggleZoom(img) {
-            img.classList.toggle('zoomed');
-        }
-    </script>
 </head>
 <body>
-
-<div class="container">
-    <div class="header">
-        <h2>مرحباً، {{ user.name }} (جهاز: {{ user.modality }})</h2>
-        <a href="/logout" class="logout-btn">تسجيل الخروج</a>
+    <div class="container">
+        {% if user %}
+        <div class="user-info">
+            مرحباً بك، {{ user.name }} (جهاز: {{ user.modality }})
+        </div>
+        {% endif %}
+        
+        <h2>لوحة فني الأشعة - رفع صور المريض</h2>
+        
+        <!-- تأكد أن action هنا يطابق تماماً /technician/upload الموجود في الـ main.py -->
+        <form action="/technician/upload" method="post" enctype="multipart/form-data">
+            <label>اسم المريض:</label>
+            <input type="text" name="patient_name" required>
+            
+            <label>تاريخ الولادة:</label>
+            <input type="date" name="birth_date" required>
+            
+            <label>ملف الصورة (أشعة / DICOM / صورة عادية):</label>
+            <input type="file" name="file" required>
+            
+            <button type="submit">رفع الصورة وتوليد الـ QR</button>
+        </form>
+        
+        <a href="/logout" class="back-link">تسجيل الخروج</a>
     </div>
-
-    <form action="/technician/add" method="POST" enctype="multipart/form-data" onsubmit="return confirmUpload();">
-        <input type="text" name="patient_name" placeholder="اسم المريض الثلاثي" required>
-        <input type="date" name="birth_date" placeholder="تاريخ الولادة" title="تاريخ الولادة" required>
-        <input type="file" name="image_file" accept="image/*,.dcm" required>
-        <button type="submit">رفع الصورة وتوليد QR</button>
-    </form>
-
-    <h3>سجلات المرضى لهذا الجهاز</h3>
-    <table>
-        <thead>
-            <tr>
-                <th>اسم المريض</th>
-                <th>تاريخ الولادة</th>
-                <th>الصورة</th>
-                <th>رمز الـ QR</th>
-                <th>التاريخ والوقت</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for p in patients %}
-            <tr>
-                <td>{{ p.patient_name }}</td>
-                <td>{{ p.birth_date }}</td>
-                <td><img src="{{ p.image_path }}" class="img-preview" onclick="toggleZoom(this)" title="اضغط للتكبير"></td>
-                <td><img src="{{ p.qr_code_path }}" width="50" height="50"></td>
-                <td>{{ p.created_at }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-
 </body>
 </html>
