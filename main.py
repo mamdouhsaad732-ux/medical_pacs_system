@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, Request, Form, HTTPException, status, Uplo
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
@@ -11,7 +12,7 @@ import datetime
 import qrcode
 from PIL import Image
 
-# إعداد قاعدة البيانات وتجنب مشاكل الخيوط المتعددة في SQLite
+# إعداد قاعدة البيانات
 SQLALCHEMY_DATABASE_URL = "sqlite:///./medical_pacs.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -19,7 +20,7 @@ Base = declarative_base()
 
 # جدول السجلات الطبية للمرضى
 class PatientRecord(Base):
-    __tablename__: str = "patient_records"
+    tablename: str = "patient_records"
 
     id = Column(Integer, primary_key=True, index=True)
     patient_name = Column(String, index=True)
@@ -34,7 +35,10 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# إضافة وسيط الجلسات (Session Middleware) لإدارة الصلاحيات وتسجيل الدخول والخروج بأمان
+# 1. إضافة وسيط البروكسي لضمان عمل الجلسات والكوكيز خلف بروتوكول HTTPS على Render بدون انقطاع
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+
+# 2. إضافة وسيط الجلسات
 app.add_middleware(SessionMiddleware, secret_key="super-secret-key-medical-pacs-system")
 
 # التأكد من إنشاء المجلدات الأساسية تلقائياً
@@ -44,10 +48,9 @@ os.makedirs("templates", exist_ok=True)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# محرك قوالب Jinja2 مباشر وآمن
 env = Environment(loader=FileSystemLoader("templates"))
 
-# قاموس المستخدمين والصلاحيات والأقسام في المركز
+# قاموس المستخدمين والصلاحيات
 USERS = {
     "ct_user": {"password": "123", "role": "technician", "modality": "CT", "name": "فني الطبقي المحوري"},
     "mri_user": {"password": "123", "role": "technician", "modality": "MRI", "name": "فني الرنين المغناطيسي"},
@@ -64,7 +67,6 @@ def get_db():
     finally:
         db.close()
 
-# مسار الجذر وصفحة تسجيل الدخول
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request):
     if "user" in request.session:
@@ -103,7 +105,6 @@ def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
 
-# لوحة تحكم الطبيب (الأدمن)
 @app.get("/doctor", response_class=HTMLResponse)
 def doctor_dashboard(request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "admin":
@@ -113,7 +114,6 @@ def doctor_dashboard(request: Request, db: Session = Depends(get_db)):
     template = env.get_template("doctor.html")
     return HTMLResponse(content=template.render(request=request, records=records, user=request.session["user"]))
 
-# لوحة تحكم السكرتارية وكتابة التقارير
 @app.get("/secretary", response_class=HTMLResponse)
 def secretary_dashboard(request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "secretary":
@@ -141,7 +141,6 @@ def save_report(
     db.commit()
     return RedirectResponse(url="/secretary", status_code=status.HTTP_303_SEE_OTHER)
 
-# لوحة تحكم الفني (رفع الصور وضغطها بـ PIL وتوليد QR)
 @app.get("/technician", response_class=HTMLResponse)
 def technician_dashboard(request: Request):
     if "user" not in request.session or request.session["user"]["role"] != "technician":
@@ -196,12 +195,12 @@ async def technician_upload(
     qr_filename = f"qr_{new_record.id}.png"
     qr_path = f"static/qrs/{qr_filename}"
     qr_img.save(qr_path)
+
     new_record.qr_code = qr_filename
     db.commit()
 
     return RedirectResponse(url="/technician", status_code=status.HTTP_303_SEE_OTHER)
 
-# صفحة عرض السجل الطبي للمريض (عبر رابط الـ QR)
 @app.get("/patient/{record_id}", response_class=HTMLResponse)
 def print_record(record_id: int, request: Request, db: Session = Depends(get_db)):
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
