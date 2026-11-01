@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, Request, Form, HTTPException, status, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 import os
@@ -18,7 +18,7 @@ Base = declarative_base()
 
 # تعريف جدول المرضى والسجلات الطبية
 class PatientRecord(Base):
-    __tablename__ = "patient_records"
+    __tablename__: str = "patient_records"
 
     id = Column(Integer, primary_key=True, index=True)
     patient_name = Column(String, index=True)
@@ -39,7 +39,9 @@ os.makedirs("static/qrs", exist_ok=True)
 os.makedirs("templates", exist_ok=True)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+
+# استخدام محرك Jinja2 مباشرة لتجنب أي تعارض في التخزين المؤقت مع إصدارات بايثون
+env = Environment(loader=FileSystemLoader("templates"))
 
 def get_db():
     db = SessionLocal()
@@ -50,11 +52,13 @@ def get_db():
 
 @app.get("/", response_class=HTMLResponse)
 def root(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+    template = env.get_template("login.html")
+    return HTMLResponse(content=template.render(request=request))
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+    template = env.get_template("login.html")
+    return HTMLResponse(content=template.render(request=request))
 
 @app.post("/login")
 def login_post(username: str = Form(...), password: str = Form(...)):
@@ -69,16 +73,19 @@ def login_post(username: str = Form(...), password: str = Form(...)):
 @app.get("/doctor", response_class=HTMLResponse)
 def doctor_dashboard(request: Request, db: Session = Depends(get_db)):
     records = db.query(PatientRecord).all()
-    return templates.TemplateResponse("doctor.html", {"request": request, "records": records})
+    template = env.get_template("doctor.html")
+    return HTMLResponse(content=template.render(request=request, records=records))
 
 @app.get("/secretary", response_class=HTMLResponse)
 def secretary_dashboard(request: Request, db: Session = Depends(get_db)):
     records = db.query(PatientRecord).all()
-    return templates.TemplateResponse("secretary.html", {"request": request, "records": records})
+    template = env.get_template("secretary.html")
+    return HTMLResponse(content=template.render(request=request, records=records))
 
 @app.get("/technician", response_class=HTMLResponse)
 def technician_dashboard(request: Request):
-    return templates.TemplateResponse("technician.html", {"request": request})
+    template = env.get_template("technician.html")
+    return HTMLResponse(content=template.render(request=request))
 
 @app.post("/technician/upload")
 async def technician_upload(
@@ -135,4 +142,5 @@ def print_record(record_id: int, request: Request, db: Session = Depends(get_db)
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
     if not record:
         raise HTTPException(status_code=404, detail="السجل غير موجود")
-    return templates.TemplateResponse("patient.html", {"request": request, "record": record})
+    template = env.get_template("patient.html")
+    return HTMLResponse(content=template.render(request=request, record=record))
