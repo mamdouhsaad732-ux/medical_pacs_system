@@ -19,7 +19,7 @@ Base = declarative_base()
 
 # تعريف نموذج جدول المرضى والسجلات الطبية في قاعدة البيانات
 class PatientRecord(Base):
-    tablename = "patient_records"
+    __tablename__ = "patient_records"
 
     id = Column(Integer, primary_key=True, index=True)
     patient_name = Column(String, index=True)
