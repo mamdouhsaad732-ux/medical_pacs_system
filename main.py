@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, Request, Form, HTTPException, status, Uplo
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import create_engine, Column, Integer, String, Text
+from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 import os
 import shutil
@@ -33,7 +33,7 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# التأكد من وجود المجلدات الضرورية للعمل وتجنب أي أخطاء مفقودة
+# التأكد من وجود المجلدات الضرورية للعمل وتجنب أي ملفات مفقودة
 os.makedirs("static/uploads", exist_ok=True)
 os.makedirs("static/qrs", exist_ok=True)
 os.makedirs("templates", exist_ok=True)
@@ -106,8 +106,9 @@ async def technician_upload(
     # توليد رمز QR الفريد المرتبط برابط السجل الطبي على Render
     qr_data = f"https://medical-pacs-system.onrender.com/patient/{new_record.id}"
     qr_img = qrcode.make(qr_data)
+    
     qr_filename = f"qr_{new_record.id}.png"
-    qr_path: str = f"static/qrs/{qr_filename}"
+    qr_path = f"static/qrs/{qr_filename}"
     qr_img.save(qr_path)
 
     new_record.qr_code = qr_filename
