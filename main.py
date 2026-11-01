@@ -16,7 +16,7 @@ engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# تعريف جدول المرضى
+# تعريف جدول المرضى والسجلات الطبية
 class PatientRecord(Base):
     __tablename__ = "patient_records"
 
@@ -33,7 +33,7 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# التأكد من وجود المجلدات المطلوبة
+# التأكد من وجود المجلدات الضرورية للعمل
 os.makedirs("static/uploads", exist_ok=True)
 os.makedirs("static/qrs", exist_ok=True)
 os.makedirs("templates", exist_ok=True)
@@ -50,11 +50,11 @@ def get_db():
 
 @app.get("/", response_class=HTMLResponse)
 def root(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(request, "login.html", {})
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(request, "login.html", {})
 
 @app.post("/login")
 def login_post(username: str = Form(...), password: str = Form(...)):
@@ -69,16 +69,16 @@ def login_post(username: str = Form(...), password: str = Form(...)):
 @app.get("/doctor", response_class=HTMLResponse)
 def doctor_dashboard(request: Request, db: Session = Depends(get_db)):
     records = db.query(PatientRecord).all()
-    return templates.TemplateResponse("doctor.html", {"request": request, "records": records})
+    return templates.TemplateResponse(request, "doctor.html", {"records": records})
 
 @app.get("/secretary", response_class=HTMLResponse)
 def secretary_dashboard(request: Request, db: Session = Depends(get_db)):
     records = db.query(PatientRecord).all()
-    return templates.TemplateResponse("secretary.html", {"request": request, "records": records})
+    return templates.TemplateResponse(request, "secretary.html", {"records": records})
 
 @app.get("/technician", response_class=HTMLResponse)
 def technician_dashboard(request: Request):
-    return templates.TemplateResponse("technician.html", {"request": request})
+    return templates.TemplateResponse(request, "technician.html", {})
 
 @app.post("/technician/upload")
 async def technician_upload(
@@ -103,7 +103,7 @@ async def technician_upload(
     db.commit()
     db.refresh(new_record)
 
-    # مطابقة مسار الـ QR مع المسار المعرف في التطبيق
+    # توليد رمز QR الفريد المرتبط برابط السجل الطبي
     qr_data = f"https://medical-pacs-system.onrender.com/patient/{new_record.id}"
     qr_img = qrcode.make(qr_data)
     qr_filename = f"qr_{new_record.id}.png"
@@ -129,10 +129,9 @@ def save_report(
     db.commit()
     return RedirectResponse(url="/secretary", status_code=status.HTTP_303_SEE_OTHER)
 
-# المسار الموحد لطباعة وعرض سجل المريض والـ QR
 @app.get("/patient/{record_id}", response_class=HTMLResponse)
 def print_record(record_id: int, request: Request, db: Session = Depends(get_db)):
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
     if not record:
         raise HTTPException(status_code=404, detail="السجل غير موجود")
-    return templates.TemplateResponse("patient.html", {"request": request, "record": record})
+    return templates.TemplateResponse(request, "patient.html", {"record": record})
