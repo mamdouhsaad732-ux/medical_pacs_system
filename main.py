@@ -154,14 +154,12 @@ async def technician_upload(
     request: Request,
     patient_name: str = Form(...),
     birth_date: str = Form(...),
+    modality: str = Form(...),  # استقبال نوع الفحص المختار من القائمة
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
     if "user" not in request.session or request.session["user"]["role"] != "technician":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-
-    current_user = request.session["user"]
-    modality = current_user.get("modality", "X-Ray")
 
     temp_path = f"static/uploads/temp_{file.filename}"
     with open(temp_path, "wb") as buffer:
@@ -181,7 +179,7 @@ async def technician_upload(
     new_record = PatientRecord(
         patient_name=patient_name,
         birth_date=birth_date,
-        modality=modality,
+        modality=modality,  # تخزين النوع المختار بدقة
         image_path=f"/{final_file_path}",
         qr_code="temp.png"
     )
@@ -200,7 +198,6 @@ async def technician_upload(
     db.commit()
 
     return RedirectResponse(url="/technician", status_code=status.HTTP_303_SEE_OTHER)
-
 @app.get("/patient/{record_id}", response_class=HTMLResponse)
 def print_record(record_id: int, request: Request, db: Session = Depends(get_db)):
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
