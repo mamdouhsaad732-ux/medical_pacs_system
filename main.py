@@ -106,7 +106,8 @@ async def technician_upload(
     # توليد رمز QR الفريد المرتبط برابط السجل الطبي على Render
     qr_data = f"https://medical-pacs-system.onrender.com/patient/{new_record.id}"
     qr_img = qrcode.make(qr_data)
-    qr_filename = f"qr_{new_record.id}.png"qr_path = f"static/qrs/{qr_filename}"
+    qr_filename = f"qr_{new_record.id}.png"
+    qr_path: str = f"static/qrs/{qr_filename}"
     qr_img.save(qr_path)
 
     new_record.qr_code = qr_filename
