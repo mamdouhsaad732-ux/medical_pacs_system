@@ -33,7 +33,7 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# التأكد من وجود المجلدات الضرورية للعمل
+# التأكد من وجود المجلدات الضرورية للعمل وتجنب أي أخطاء مفقودة
 os.makedirs("static/uploads", exist_ok=True)
 os.makedirs("static/qrs", exist_ok=True)
 os.makedirs("templates", exist_ok=True)
@@ -50,11 +50,11 @@ def get_db():
 
 @app.get("/", response_class=HTMLResponse)
 def root(request: Request):
-    return templates.TemplateResponse(request, "login.html", {})
+    return templates.TemplateResponse("login.html", {"request": request})
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
-    return templates.TemplateResponse(request, "login.html", {})
+    return templates.TemplateResponse("login.html", {"request": request})
 
 @app.post("/login")
 def login_post(username: str = Form(...), password: str = Form(...)):
@@ -69,16 +69,16 @@ def login_post(username: str = Form(...), password: str = Form(...)):
 @app.get("/doctor", response_class=HTMLResponse)
 def doctor_dashboard(request: Request, db: Session = Depends(get_db)):
     records = db.query(PatientRecord).all()
-    return templates.TemplateResponse(request, "doctor.html", {"records": records})
+    return templates.TemplateResponse("doctor.html", {"request": request, "records": records})
 
 @app.get("/secretary", response_class=HTMLResponse)
 def secretary_dashboard(request: Request, db: Session = Depends(get_db)):
     records = db.query(PatientRecord).all()
-    return templates.TemplateResponse(request, "secretary.html", {"records": records})
+    return templates.TemplateResponse("secretary.html", {"request": request, "records": records})
 
 @app.get("/technician", response_class=HTMLResponse)
 def technician_dashboard(request: Request):
-    return templates.TemplateResponse(request, "technician.html", {})
+    return templates.TemplateResponse("technician.html", {"request": request})
 
 @app.post("/technician/upload")
 async def technician_upload(
@@ -103,11 +103,10 @@ async def technician_upload(
     db.commit()
     db.refresh(new_record)
 
-    # توليد رمز QR الفريد المرتبط برابط السجل الطبي
+    # توليد رمز QR الفريد المرتبط برابط السجل الطبي على Render
     qr_data = f"https://medical-pacs-system.onrender.com/patient/{new_record.id}"
     qr_img = qrcode.make(qr_data)
-    qr_filename = f"qr_{new_record.id}.png"
-    qr_path = f"static/qrs/{qr_filename}"
+    qr_filename = f"qr_{new_record.id}.png"qr_path = f"static/qrs/{qr_filename}"
     qr_img.save(qr_path)
 
     new_record.qr_code = qr_filename
@@ -134,4 +133,4 @@ def print_record(record_id: int, request: Request, db: Session = Depends(get_db)
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
     if not record:
         raise HTTPException(status_code=404, detail="السجل غير موجود")
-    return templates.TemplateResponse(request, "patient.html", {"record": record})
+    return templates.TemplateResponse("patient.html", {"request": request, "record": record})
