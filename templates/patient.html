@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>الملف الطبي للمريض</title>
+    <style>
+        body { font-family: Tahoma, sans-serif; background: #ffffff; padding: 40px; direction: rtl; text-align: right; }
+        .card { max-width: 650px; margin: auto; background: white; padding: 25px; border-radius: 8px; border: 1px solid #e0e0e0; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        h2 { color: #007bff; border-bottom: 2px solid #007bff; padding-bottom: 8px; margin-top: 0; }
+        p { font-size: 16px; line-height: 1.8; color: #333; margin: 8px 0; }
+        
+        .scan-container { text-align: center; margin-top: 15px; }
+        .scan-img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #ddd; cursor: zoom-in; transition: transform 0.3s ease; display: inline-block; }
+        .scan-img.zoomed { transform: scale(1.8); cursor: zoom-out; }
+        
+        .qr-code { text-align: center; margin-top: 25px; border-top: 1px dashed #ccc; padding-top: 15px; }
+    </style>
+    <script>
+        function toggleZoom(img) {
+            img.classList.toggle('zoomed');
+        }
+    </script>
+</head>
+<body>
+
+<div class="card">
+    <h2>التقرير الطبي الإشعاعي</h2>
+    <p><strong>اسم المريض:</strong> {{ patient.patient_name }}</p>
+    <p><strong>تاريخ الولادة:</strong> {{ patient.birth_date }}</p>
+    <p><strong>نوع الجهاز:</strong> {{ patient.modality }}</p>
+    <p><strong>تاريخ ووقت الفحص:</strong> {{ patient.created_at }}</p>
+    <p><strong>التقرير التشخيصي المعتمد:</strong><br>{{ patient.report_text }}</p>
+    
+    <div class="scan-container">
+        <strong>صورة الفحص الطبي (اضغط على الصورة للتكبير/التصغير):</strong><br>
+        <img src="{{ patient.image_path }}" class="scan-img" onclick="toggleZoom(this)" title="اضغط للتكبير">
+    </div>
+
+    <div class="qr-code">
+        <p style="font-size: 12px; color: #666;">رمز التحقق الخاص بالمريض (QR Code)</p>
+        <img src="{{ patient.qr_code_path }}" width="100" height="100">
+    </div>
+</div>
+
+</body>
+</html>

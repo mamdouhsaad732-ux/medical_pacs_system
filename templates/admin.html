@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>واجهة الدكتور سامر - الأدمن المطلق</title>
+    <style>
+        body { font-family: Tahoma, sans-serif; background: #f4f6f9; padding: 20px; direction: rtl; }
+        .container { max-width: 1200px; margin: auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
+        .logout-btn { background: #dc3545; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; vertical-align: middle; }
+        th { background: #dc3545; color: white; }
+        .img-preview { width: 70px; height: 70px; object-fit: cover; border-radius: 4px; border: 1px solid #ccc; cursor: zoom-in; transition: transform 0.3s; }
+        .img-preview.zoomed { transform: scale(2.5); cursor: zoom-out; z-index: 99; position: relative; }
+        input, textarea { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        textarea { height: 50px; }
+        .btn-save { background: #007bff; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 4px; }
+        .btn-delete { background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 4px; }
+    </style>
+    <script>
+        function confirmDelete() {
+            return confirm("تحذير: هل أنت متأكد تماماً من رغبتك في حذف هذا السجل نهائياً؟");
+        }
+        function confirmUpdate() {
+            return confirm("هل أنت متأكد من حفظ التعديلات على هذا السجل؟");
+        }
+        function toggleZoom(img) {
+            img.classList.toggle('zoomed');
+        }
+    </script>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h2>مرحباً، الدكتور سامر (لوحة الأدمن ذات الصلاحيات المطلقة)</h2>
+        <a href="/logout" class="logout-btn">تسجيل الخروج</a>
+    </div>
+
+    <p>يمكنك من هنا عرض جميع السجلات، تعديل البيانات أو التقارير، أو حذف أي سجل بشكل كامل، وتكبير الصور بالضغط عليها:</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>اسم المريض</th>
+                <th>تاريخ الولادة</th>
+                <th>الجهاز</th>
+                <th>الصورة</th>
+                <th>التقرير التشخيصي</th>
+                <th>رمز الـ QR</th>
+                <th>إدارة وحفظ</th>
+                <th>حذف</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in patients %}
+            <tr>
+                <form action="/doctor/update/{{ p.uuid }}" method="POST" onsubmit="return confirmUpdate();">
+                    <td><input type="text" name="patient_name" value="{{ p.patient_name }}" required></td>
+                    <td><input type="date" name="birth_date" value="{{ p.birth_date }}" required></td>
+                    <td>{{ p.modality }}</td>
+                    <td>
+                        <img src="{{ p.image_path }}" class="img-preview" onclick="toggleZoom(this)" title="اضغط للتكبير">
+                    </td>
+                    <td><textarea name="report_text">{{ p.report_text }}</textarea></td>
+                    <td><img src="{{ p.qr_code_path }}" width="50" height="50"></td>
+                    <td>
+                        <button type="submit" class="btn-save">حفظ التعديل</button>
+                    </td>
+                </form>
+                <td>
+                    <form action="/doctor/delete/{{ p.uuid }}" method="POST" onsubmit="return confirmDelete();">
+                        <button type="submit" class="btn-delete">حذف</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+</body>
+</html>
