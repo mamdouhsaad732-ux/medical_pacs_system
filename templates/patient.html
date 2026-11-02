@@ -2,45 +2,75 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>الملف الطبي للمريض</title>
+    <title>نتيجة فحص المريض - #{{ record.id }}</title>
     <style>
-        body { font-family: Tahoma, sans-serif; background: #ffffff; padding: 40px; direction: rtl; text-align: right; }
-        .card { max-width: 650px; margin: auto; background: white; padding: 25px; border-radius: 8px; border: 1px solid #e0e0e0; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-        h2 { color: #007bff; border-bottom: 2px solid #007bff; padding-bottom: 8px; margin-top: 0; }
-        p { font-size: 16px; line-height: 1.8; color: #333; margin: 8px 0; }
-        
-        .scan-container { text-align: center; margin-top: 15px; }
-        .scan-img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #ddd; cursor: zoom-in; transition: transform 0.3s ease; display: inline-block; }
-        .scan-img.zoomed { transform: scale(1.8); cursor: zoom-out; }
-        
-        .qr-code { text-align: center; margin-top: 25px; border-top: 1px dashed #ccc; padding-top: 15px; }
-    </style>
-    <script>
-        function toggleZoom(img) {
-            img.classList.toggle('zoomed');
+        body { font-family: Tahoma, sans-serif; background: #f8fafc; margin: 0; padding: 20px; color: #1e293b; }
+        .patient-container { max-width: 800px; margin: auto; background: white; border: 1px solid #cbd5e1; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .header { text-align: center; border-bottom: 2px solid #1e3a8a; padding-bottom: 15px; margin-bottom: 20px; }
+        .header h2 { color: #1e3a8a; margin: 0 0 5px 0; font-size: 20px; }
+        .header p { color: #64748b; margin: 0; font-size: 14px; }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; font-size: 15px; background: #f1f5f9; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .report-section { margin-bottom: 20px; }
+        .report-section b { color: #1e3a8a; display: block; margin-bottom: 8px; }
+        .report-box { border: 1px solid #cbd5e1; padding: 15px; min-height: 100px; border-radius: 6px; background: #fafafa; font-size: 15px; line-height: 1.6; }
+        .image-preview-section { text-align: center; margin-top: 25px; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+        .image-preview-section h3 { color: #1e3a8a; margin-bottom: 10px; font-size: 16px; }
+        .patient-img { max-width: 100%; max-height: 500px; border: 2px solid #cbd5e1; border-radius: 8px; padding: 4px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .btn-view-full { display: inline-block; margin-top: 12px; background: #2563eb; color: white; padding: 8px 16px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; transition: 0.2s; }
+        .btn-view-full:hover { background: #1d4ed8; }
+        .footer { display: flex; justify-content: space-between; align-items: center; margin-top: 30px; border-top: 1px solid #cbd5e1; padding-top: 15px; font-size: 14px; }
+        .qr-img { width: 90px; height: 90px; object-fit: contain; }
+        .btn-print { background: #16a34a; color: white; border: none; padding: 12px 25px; font-size: 16px; border-radius: 6px; cursor: pointer; font-weight: bold; display: block; margin: 25px auto; transition: 0.2s; }
+        .btn-print:hover { background: #15803d; }
+        @media print {
+            .btn-print, .btn-view-full { display: none !important; }
+            body { background: white; padding: 0; }
+            .patient-container { border: none; box-shadow: none; padding: 0; max-width: 100%; }
         }
-    </script>
+    </style>
 </head>
 <body>
-
-<div class="card">
-    <h2>التقرير الطبي الإشعاعي</h2>
-    <p><strong>اسم المريض:</strong> {{ patient.patient_name }}</p>
-    <p><strong>تاريخ الولادة:</strong> {{ patient.birth_date }}</p>
-    <p><strong>نوع الجهاز:</strong> {{ patient.modality }}</p>
-    <p><strong>تاريخ ووقت الفحص:</strong> {{ patient.created_at }}</p>
-    <p><strong>التقرير التشخيصي المعتمد:</strong><br>{{ patient.report_text }}</p>
-    
-    <div class="scan-container">
-        <strong>صورة الفحص الطبي (اضغط على الصورة للتكبير/التصغير):</strong><br>
-        <img src="{{ patient.image_path }}" class="scan-img" onclick="toggleZoom(this)" title="اضغط للتكبير">
+    <div class="patient-container">
+        <div class="header">
+            <h2>مركز التشخيص الطبي والتصوير الشعاعي</h2>
+            <p>بوابة الاستعلام الطبي والتقرير الرسمي للمريض</p>
+        </div>
+        
+        <div class="info-grid">
+            <div><b>رقم السجل:</b> #{{ record.id }}</div>
+            <div><b>اسم المريض:</b> {{ record.patient_name }}</div>
+            <div><b>تاريخ الولادة:</b> {{ record.birth_date }}</div>
+            <div><b>نوع الفحص:</b> {{ record.modality }}</div>
+        </div>
+        
+        <div class="report-section">
+            <b>التقرير التشخيصي المعتمد:</b>
+            <div class="report-box">
+                <p style="white-space: pre-wrap; margin: 0;">{{ record.report }}</p>
+            </div>
+        </div>
+        
+        <div class="image-preview-section">
+            <h3>صورة الأشعة الخاصة بالفحص:</h3>
+            <!-- عرض الصورة مباشرة بوضوح لتظهر فور مسح الـ QR -->
+            <img src="{{ record.image_path }}" class="patient-img" alt="صورة الأشعة الطبية">
+            <br>
+            <a href="{{ record.image_path }}" target="_blank" class="btn-view-full">فتح الصورة بالحجم الكامل (تكبير)</a>
+        </div>
+        
+        <div class="footer">
+            <div>
+                <p><b>ختم وتوقيع المركز الطبي</b></p>
+                <p>التاريخ: {{ record.created_at }}</p>
+            </div>
+            <div>
+                {% if record.qr_code and record.qr_code != "temp.png" %}
+                    <img src="/static/qrs/{{ record.qr_code }}" class="qr-img" alt="QR Code">
+                {% endif %}
+            </div>
+        </div>
     </div>
 
-    <div class="qr-code">
-        <p style="font-size: 12px; color: #666;">رمز التحقق الخاص بالمريض (QR Code)</p>
-        <img src="{{ patient.qr_code_path }}" width="100" height="100">
-    </div>
-</div>
-
+    <button onclick="window.print()" class="btn-print">طباعة التقرير والصورة معاً</button>
 </body>
 </html>
