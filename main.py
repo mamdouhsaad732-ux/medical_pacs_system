@@ -12,7 +12,6 @@ import datetime
 import qrcode
 from PIL import Image
 
-# إعداد قاعدة البيانات المحلية
 SQLALCHEMY_DATABASE_URL = "sqlite:///./medical_pacs.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -93,6 +92,7 @@ def login_post(request: Request, username: str = Form(...), password: str = Form
             return RedirectResponse(url="/technician", status_code=status.HTTP_303_SEE_OTHER)
     
     return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+
 @app.get("/logout")
 def logout(request: Request):
     request.session.clear()
@@ -117,7 +117,7 @@ def doctor_delete_record(record_id: int, request: Request, db: Session = Depends
         db.commit()
     return RedirectResponse(url="/doctor", status_code=status.HTTP_303_SEE_OTHER)
 
-# --- مسارات الأرشيف الهرمي للأدمن (المصححة جذرياً لمنع Internal Server Error) ---
+# --- مسارات الأرشيف الهرمي (مع حماية تامة ضد Internal Server Error) ---
 @app.get("/doctor/archive", response_class=HTMLResponse)
 def archive_home(request: Request):
     if "user" not in request.session or request.session["user"]["role"] != "admin":
@@ -129,44 +129,46 @@ def archive_home(request: Request):
 def archive_months(modality: str, request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "admin":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-    
-    records = db.query(PatientRecord).filter(PatientRecord.modality == modality).all()
-    months = sorted(list(set([str(r.created_at)[:7] for r in records if r.created_at and len(str(r.created_at)) >= 7])), reverse=True)
-    
-    template = env.get_template("archive_months.html")
-    return HTMLResponse(content=template.render(request=request, modality=modality, months=months, user=request.session["user"]))
+    try:
+        records = db.query(PatientRecord).filter(PatientRecord.modality.ilike(modality)).all()
+        months = sorted(list(set([str(r.created_at)[:7] for r in records if r.created_at and len(str(r.created_at)) >= 7])), reverse=True)
+        template = env.get_template("archive_months.html")
+        return HTMLResponse(content=template.render(request=request, modality=modality, months=months, user=request.session["user"]))
+    except Exception as e:
+        return HTMLResponse(content=f"<h3>خطأ في الأرشيف (الشهور):</h3><pre>{str(e)}</pre>", status_code=500)
 
 @app.get("/doctor/archive/{modality}/{month}", response_class=HTMLResponse)
 def archive_days(modality: str, month: str, request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "admin":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-    
-    records = db.query(PatientRecord).filter(PatientRecord.modality == modality).all()
-    month_records = [r for r in records if r.created_at and str(r.created_at).startswith(month)]
-    days = sorted(list(set([str(r.created_at)[:10] for r in month_records if len(str(r.created_at)) >= 10])), reverse=True)
-    
-    template = env.get_template("archive_days.html")
-    return HTMLResponse(content=template.render(request=request, modality=modality, month=month, days=days, user=request.session["user"]))
+    try:
+        records = db.query(PatientRecord).filter(PatientRecord.modality.ilike(modality)).all()
+        month_records = [r for r in records if r.created_at and str(r.created_at).startswith(month)]
+        days = sorted(list(set([str(r.created_at)[:10] for r in month_records if len(str(r.created_at)) >= 10])), reverse=True)
+        template = env.get_template("archive_days.html")
+        return HTMLResponse(content=template.render(request=request, modality=modality, month=month, days=days, user=request.session["user"]))
+    except Exception as e:
+        return HTMLResponse(content=f"<h3>خطأ في الأرشيف (الأيام):</h3><pre>{str(e)}</pre>", status_code=500)
 
 @app.get("/doctor/archive/{modality}/{month}/{day}", response_class=HTMLResponse)
 def archive_records(modality: str, month: str, day: str, request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "admin":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-    
-    records = db.query(PatientRecord).filter(PatientRecord.modality == modality).all()
-    day_records = [r for r in records if r.created_at and str(r.created_at).startswith(day)]
-    
-    template = env.get_template("archive_records.html")
-    return HTMLResponse(content=template.render(request=request, modality=modality, month=month, day=day, records=day_records, user=request.session["user"]))
+    try:
+        records = db.query(PatientRecord).filter(PatientRecord.modality.ilike(modality)).all()
+        day_records = [r for r in records if r.created_at and str(r.created_at).startswith(day)]
+        template = env.get_template("archive_records.html")
+        return HTMLResponse(content=template.render(request=request, modality=modality, month=month, day=day, records=day_records, user=request.session["user"]))
+    except Exception as e:
+        return HTMLResponse(content=f"<h3>خطأ في الأرشيف (السجلات):</h3><pre>{str(e)}</pre>", status_code=500)
 
 @app.get("/secretary", response_class=HTMLResponse)
 def secretary_dashboard(request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "secretary":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-    
     records = db.query(PatientRecord).all()
     template = env.get_template("secretary.html")
-    return HTMLResponse(content=template.render(request=request, records=records, user=request.session["user"]))
+    return HTMLResponse(content=template.render(request=request, records=records, user=request.session["user"], success=request.query_params.get("success")))
 
 @app.post("/save-report")
 def save_report(
@@ -188,7 +190,7 @@ def save_report(
     
     if user["role"] == "admin":
         return RedirectResponse(url="/doctor", status_code=status.HTTP_303_SEE_OTHER)
-    return RedirectResponse(url="/secretary", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/secretary?success=1", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.get("/download-report/{record_id}")
 def download_report(record_id: int, request: Request, db: Session = Depends(get_db)):
@@ -222,7 +224,6 @@ def download_report(record_id: int, request: Request, db: Session = Depends(get_
 def technician_dashboard(request: Request):
     if "user" not in request.session or request.session["user"]["role"] != "technician":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-    
     template = env.get_template("technician.html")
     return HTMLResponse(content=template.render(request=request, user=request.session["user"], success=request.query_params.get("success")))
 
@@ -261,7 +262,6 @@ async def technician_upload(
         db.commit()
         db.refresh(new_record)
 
-        # توليد رابط الـ QR باستخدام الرابط الحي الحقيقي للسيرفر ليعمل على الهواتف بسلاسة
         base_url = str(request.base_url).rstrip("/")
         qr_data = f"{base_url}/patient/{new_record.id}"
         
