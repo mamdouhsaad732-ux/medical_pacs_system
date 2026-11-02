@@ -12,7 +12,7 @@ import datetime
 import qrcode
 from PIL import Image
 
-# إعداد قاعدة البيانات
+# إعداد قاعدة البيانات وتجنب مشاكل الخيوط المتعددة في SQLite
 SQLALCHEMY_DATABASE_URL = "sqlite:///./medical_pacs.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -35,10 +35,10 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# 1. إضافة وسيط البروكسي لضمان عمل الجلسات والكوكيز خلف بروتوكول HTTPS على Render بدون انقطاع
+# إضافة وسيط البروكسي لضمان عمل الجلسات خلف بروتوكول HTTPS على Render
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
-# 2. إضافة وسيط الجلسات
+# إضافة وسيط الجلسات لإدارة الصلاحيات
 app.add_middleware(SessionMiddleware, secret_key="super-secret-key-medical-pacs-system")
 
 # التأكد من إنشاء المجلدات الأساسية تلقائياً
@@ -48,6 +48,7 @@ os.makedirs("templates", exist_ok=True)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# محرك قوالب Jinja2
 env = Environment(loader=FileSystemLoader("templates"))
 
 # قاموس المستخدمين والصلاحيات
@@ -67,6 +68,7 @@ def get_db():
     finally:
         db.close()
 
+# 1. مسار الجذر وتسجيل الدخول
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request):
     if "user" in request.session:
@@ -105,6 +107,7 @@ def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
 
+# 2. لوحة تحكم الطبيب (الأدمن)
 @app.get("/doctor", response_class=HTMLResponse)
 def doctor_dashboard(request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "admin":
@@ -114,6 +117,7 @@ def doctor_dashboard(request: Request, db: Session = Depends(get_db)):
     template = env.get_template("doctor.html")
     return HTMLResponse(content=template.render(request=request, records=records, user=request.session["user"]))
 
+# 3. لوحة تحكم السكرتارية
 @app.get("/secretary", response_class=HTMLResponse)
 def secretary_dashboard(request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "secretary":
@@ -141,6 +145,7 @@ def save_report(
     db.commit()
     return RedirectResponse(url="/secretary", status_code=status.HTTP_303_SEE_OTHER)
 
+# 4. لوحة تحكم الفني (رفع الصور ومعالجتها مع كشف الأخطاء)
 @app.get("/technician", response_class=HTMLResponse)
 def technician_dashboard(request: Request):
     if "user" not in request.session or request.session["user"]["role"] != "technician":
@@ -154,50 +159,62 @@ async def technician_upload(
     request: Request,
     patient_name: str = Form(...),
     birth_date: str = Form(...),
-    modality: str = Form(...),  # استقبال نوع الفحص المختار من القائمة
+    modality: str = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-    if "user" not in request.session or request.session["user"]["role"] != "technician":
-        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-
-    temp_path = f"static/uploads/temp_{file.filename}"
-    with open(temp_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    clean_filename = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename}"
-    final_file_path = f"static/uploads/{clean_filename}"
-    
     try:
-        img = Image.open(temp_path)
-        img.thumbnail((1200, 1200))
-        img.save(final_file_path, optimize=True, quality=85)
-        os.remove(temp_path)
-    except Exception:
-        os.rename(temp_path, final_file_path)
+        if "user" not in request.session:
+            return HTMLResponse(content="<h3>خطأ: انتهت الجلسة. يرجى <a href='/login'>تسجيل الدخول مجدداً</a>.</h3>", status_code=401)
 
-    new_record = PatientRecord(
-        patient_name=patient_name,
-        birth_date=birth_date,
-        modality=modality,  # تخزين النوع المختار بدقة
-        image_path=f"/{final_file_path}",
-        qr_code="temp.png"
-    )
-    db.add(new_record)
-    db.commit()
-    db.refresh(new_record)
+        os.makedirs("static/uploads", exist_ok=True)
+        os.makedirs("static/qrs", exist_ok=True)
 
-    qr_data = f"https://medical-pacs-system.onrender.com/patient/{new_record.id}"
-    qr_img = qrcode.make(qr_data)
-    
-    qr_filename = f"qr_{new_record.id}.png"
-    qr_path = f"static/qrs/{qr_filename}"
-    qr_img.save(qr_path)
+        temp_path = f"static/uploads/temp_{file.filename}"
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-    new_record.qr_code = qr_filename
-    db.commit()
+        clean_filename = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename}"
+        final_file_path = f"static/uploads/{clean_filename}"
+        
+        try:
+            img = Image.open(temp_path)
+            img.thumbnail((1200, 1200))
+            img.save(final_file_path, optimize=True, quality=85)
+            os.remove(temp_path)
+        except Exception:
+            os.rename(temp_path, final_file_path)
 
-    return RedirectResponse(url="/technician", status_code=status.HTTP_303_SEE_OTHER)
+        new_record = PatientRecord(
+            patient_name=patient_name,
+            birth_date=birth_date,
+            modality=modality,
+            image_path=f"/{final_file_path}",
+            qr_code="temp.png"
+        )
+        db.add(new_record)
+        db.commit()
+        db.refresh(new_record)
+
+        qr_data = f"https://medical-pacs-system.onrender.com/patient/{new_record.id}"
+        qr_img = qrcode.make(qr_data)
+        
+        qr_filename = f"qr_{new_record.id}.png"
+        qr_path = f"static/qrs/{qr_filename}"
+        qr_img.save(qr_path)
+
+        new_record.qr_code = qr_filename
+        db.commit()
+
+        return RedirectResponse(url="/technician", status_code=status.HTTP_303_SEE_OTHER)
+
+    except Exception as e:
+        import traceback
+        err_details = traceback.format_exc()
+        print("UPLOAD ERROR:", err_details)
+        return HTMLResponse(content=f"<h3 style='color:red;'>حدث خطأ أثناء الرفع:</h3><pre>{err_details}</pre>", status_code=500)
+
+# 5. صفحة عرض السجل الطبي للمريض عبر الـ QR
 @app.get("/patient/{record_id}", response_class=HTMLResponse)
 def print_record(record_id: int, request: Request, db: Session = Depends(get_db)):
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
