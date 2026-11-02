@@ -5,31 +5,30 @@
     <title>أرشيف الشهور - {{ modality }}</title>
     <style>
         body { font-family: Tahoma, sans-serif; background: #f8fafc; margin: 0; padding: 40px; color: #1e293b; }
-        .container { max-width: 700px; background: white; margin: auto; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); text-align: center; border: 1px solid #e2e8f0; }
-        h2 { color: #1e3a8a; margin-bottom: 25px; font-size: 20px; }
+        .container { max-width: 800px; background: white; margin: auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; text-align: center; }
+        h2 { color: #1e3a8a; margin-bottom: 25px; }
         .list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 30px; }
-        .item { background: #f8fafc; padding: 14px 20px; border-radius: 8px; text-decoration: none; color: #334155; font-size: 15px; font-weight: bold; border: 1px solid #cbd5e1; transition: all 0.2s ease; display: block; }
-        .item:hover { background: #eff6ff; color: #1e3a8a; border-color: #3b82f6; }
-        .empty-msg { color: #64748b; font-size: 14px; padding: 20px; }
-        .back-link { color: #2563eb; text-decoration: none; font-weight: bold; font-size: 14px; }
-        .back-link:hover { text-decoration: underline; }
+        .item { background: #f8fafc; border: 1px solid #cbd5e1; padding: 15px; border-radius: 6px; text-decoration: none; color: #2563eb; font-weight: bold; font-size: 16px; transition: 0.2s; display: block; }
+        .item:hover { background: #2563eb; color: white; }
+        .btn-back { background: #64748b; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; }
+        .no-data { color: #64748b; padding: 20px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>أرشيف فحص ({{ modality }}): اختر الشهر</h2>
+        <h2>أرشيف الشهور لجهاز: {{ modality }}</h2>
         
         <div class="list">
             {% if months %}
-                {% for m in months %}
-                    <a href="/doctor/archive/{{ modality }}/{{ m }}" class="item">📅 شهر: {{ m }}</a>
+                {% for month in months %}
+                    <a href="/doctor/archive/{{ modality }}/{{ month }}" class="item">📅 شهر: {{ month }}</a>
                 {% endfor %}
             {% else %}
-                <div class="empty-msg">لا توجد أي سجلات أرشيفية متوفرة لهذا الفحص حتى الآن.</div>
+                <div class="no-data">لا توجد سجلات مسجلة لهذا الجهاز حتى الآن.</div>
             {% endif %}
         </div>
-        
-        <a href="/doctor/archive" class="back-link">⬅ العودة لاختيار نوع الفحص</a>
+
+        <a href="/doctor/archive" class="btn-back">← العودة لاختيار الأجهزة</a>
     </div>
 </body>
 </html>
