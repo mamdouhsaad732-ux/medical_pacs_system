@@ -152,8 +152,14 @@ async def technician_upload(
     db: Session = Depends(get_db)
 ):
     try:
+        # طباعة للتأكد من وصول البيانات وتفاصيل الجلسة
+        print("=== محاولة رفع جديدة ===")
+        print(f"المريض: {patient_name}, التاريخ: {birth_date}, النوع: {modality}")
+        print(f"الملف المرسل: {file.filename}")
+        
         if "user" not in request.session:
-            return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+            print("خطأ: المستخدم غير مسجل في الجلسة!")
+            return HTMLResponse(content="<h3 style='color:red;'>خطأ: الجلسة غير مفعلة أو انتهت. يرجى تسجيل الدخول مجدداً.</h3>", status_code=401)
 
         os.makedirs("static/uploads", exist_ok=True)
         os.makedirs("static/qrs", exist_ok=True)
@@ -170,9 +176,11 @@ async def technician_upload(
             img.thumbnail((1200, 1200))
             img.save(final_file_path, optimize=True, quality=85)
             os.remove(temp_path)
-        except Exception:
+        except Exception as img_err:
+            print(f"ملاحظة بخصوص الصورة (تم تخطي المعالجة ونقل الملف مباشرة): {img_err}")
             os.rename(temp_path, final_file_path)
 
+        # إنشاء السجل في قاعدة البيانات
         new_record = PatientRecord(
             patient_name=patient_name,
             birth_date=birth_date,
@@ -183,7 +191,9 @@ async def technician_upload(
         db.add(new_record)
         db.commit()
         db.refresh(new_record)
+        print(f"تم حفظ السجل برقم ID: {new_record.id}")
 
+        # توليد الـ QR
         qr_data = f"https://medical-pacs-system.onrender.com/patient/{new_record.id}"
         qr_img = qrcode.make(qr_data)
         
@@ -193,15 +203,26 @@ async def technician_upload(
 
         new_record.qr_code = qr_filename
         db.commit()
+        print("تم توليد وحفظ الـ QR بنجاح!")
 
-        return RedirectResponse(url="/technician", status_code=status.HTTP_303_SEE_OTHER)
+        # إرجاع رسالة نجاح واضحة بدلاً من إعادة التوجيه الصامت لنتأكد 100% أن العملية تمت
+        return HTMLResponse(content=f"""
+            <div style="font-family: Tahoma; text-align: center; margin-top: 50px; direction: rtl;">
+                <h2 style="color: green;">تم رفع السجل وتوليد الـ QR بنجاح تام! 🎉</h2>
+                <p>رقم السجل: <b>{new_record.id}</b></p>
+                <p>اسم المريض: <b>{patient_name}</b></p>
+                <br>
+                <a href="/technician" style="background: #1e3a8a; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">العودة لصفحة الرفع</a>
+                | 
+                <a href="/secretary" style="background: #16a34a; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">الانتقال لصفحة السكرتاريا</a>
+            </div>
+        """)
 
     except Exception as e:
         import traceback
         err_details = traceback.format_exc()
-        print("UPLOAD ERROR:", err_details)
-        return HTMLResponse(content=f"<h3 style='color:red;'>خطأ في السيرفر أثناء الرفع:</h3><pre>{err_details}</pre>", status_code=500)
-
+        print("CRITICAL UPLOAD ERROR:", err_details)
+        return HTMLResponse(content=f"<h3 style='color:red;'>حدث خطأ برمجي قاتل أثناء الرفع:</h3><pre>{err_details}</pre>", status_code=500)
 @app.get("/patient/{record_id}", response_class=HTMLResponse)
 def print_record(record_id: int, request: Request, db: Session = Depends(get_db)):
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
