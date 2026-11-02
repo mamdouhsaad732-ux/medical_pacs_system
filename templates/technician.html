@@ -2,61 +2,54 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>لوحة الفني - رفع صور الأشعة</title>
+    <title>لوحة الفني - رفع الفحص</title>
     <style>
-        body { font-family: Tahoma, sans-serif; background: #f8fafc; margin: 0; padding: 20px; }
-        .container { max-width: 600px; background: white; margin: 30px auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        h2 { color: #1e3a8a; text-align: center; margin-bottom: 20px; }
-        .user-info { background: #e2e8f0; padding: 10px; border-radius: 6px; margin-bottom: 20px; text-align: center; font-weight: bold; color: #1e293b; }
+        body { font-family: Tahoma, sans-serif; background: #f8fafc; margin: 0; padding: 40px; color: #1e293b; }
+        .container { max-width: 600px; background: white; margin: auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1e3a8a; padding-bottom: 15px; margin-bottom: 20px; }
+        .header h2 { color: #1e3a8a; margin: 0; font-size: 18px; }
+        .logout-btn { background: #ef4444; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: bold; }
         .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; color: #334155; }
-        input, select { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
-        button { background: #2563eb; color: white; border: none; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; margin-top: 10px; }
-        button:hover { background: #1d4ed8; }
-        .logout-link { display: block; text-align: center; margin-top: 20px; color: #dc2626; text-decoration: none; font-weight: bold; }
+        label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 14px; color: #334155; }
+        input[type="text"], input[type="date"], select, input[type="file"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+        .btn-submit { background: #16a34a; color: white; border: none; padding: 12px; width: 100%; font-size: 16px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; margin-top: 10px; }
+        .btn-submit:hover { background: #15803d; }
+        .alert-success { background: #dcfce7; color: #166534; padding: 12px; border-radius: 6px; margin-bottom: 20px; text-align: center; font-weight: bold; border: 1px solid #bbf7d0; }
     </style>
 </head>
 <body>
     <div class="container">
-        {% if user %}
-        <div class="user-info">
-            مرحباً بك، {{ user.name }} ({{ user.modality }})
+        <div class="header">
+            <h2>لوحة الفني - رفع صور الفحص الطبي</h2>
+            <a href="/logout" class="logout-btn">تسجيل الخروج</a>
         </div>
+
+        {% if success %}
+            <div class="alert-success">تم رفع الفحص وتوليد الـ QR بنجاح تام!</div>
         {% endif %}
-        
-        <h2>رفع فحص مريض جديد وتوليد الـ QR</h2>
-        
-        <!-- ملاحظة هامة جداً: enctype="multipart/form-data" هي المسؤولة عن إرسال الملفات بنجاح -->
-        <form action="/technician/upload" method="post" enctype="multipart/form-data">
+
+        <!-- نموذج مع رسالة تأكيد قبل الإرسال -->
+        <form action="/technician/upload" method="post" enctype="multipart/form-data" onsubmit="return confirm('هل أنت متأكد من صحة بيانات المريض ورغبتك في رفع الفحص وتوليد رمز الـ QR؟');">
             <div class="form-group">
-                <label>اسم المريض الثلاثي:</label>
-                <input type="text" name="patient_name" required placeholder="أدخل اسم المريض الكامل">
+                <label>اسم المريض الكامل:</label>
+                <input type="text" name="patient_name" required placeholder="أدخل اسم المريض">
             </div>
-            
             <div class="form-group">
                 <label>تاريخ الولادة:</label>
                 <input type="date" name="birth_date" required>
             </div>
-            
             <div class="form-group">
-                <label>نوع الجهاز / الفحص (Modality):</label>
+                <label>نوع الفحص (Modality):</label>
                 <select name="modality" required>
-                    <option value="CT">الطبقي المحوري (CT)</option>
-                    <option value="MRI">الرنين المغناطيسي (MRI)</option>
-                    <option value="X-Ray">الأشعة السينية (X-Ray)</option>
-                    <option value="Echo">الأمواج فوق الصوتية (Echo)</option>
+                    <option value="{{ user.modality }}" selected>{{ user.modality }}</option>
                 </select>
             </div>
-            
             <div class="form-group">
-                <label>ملف صورة الأشعة (DICOM / Image):</label>
-                <input type="file" name="file" required accept="image/*,.dcm">
+                <label>ملف الفحص (صورة ثابتة أو متحركة / Scan / GIF):</label>
+                <input type="file" name="file" required>
             </div>
-            
-            <button type="submit">رفع وتوليد الـ QR وسجل المريض</button>
+            <button type="submit" class="btn-submit">رفع الفحص وتوليد الـ QR</button>
         </form>
-        
-        <a href="/logout" class="logout-link">تسجيل الخروج</a>
     </div>
 </body>
 </html>
