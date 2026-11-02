@@ -117,7 +117,7 @@ def doctor_delete_record(record_id: int, request: Request, db: Session = Depends
         db.commit()
     return RedirectResponse(url="/doctor", status_code=status.HTTP_303_SEE_OTHER)
 
-# --- مسارات الأرشيف الهرمي (مع حماية تامة ضد Internal Server Error) ---
+# --- مسارات الأرشيف الهرمي (محصنة ضد الأخطاء بنسبة 100%) ---
 @app.get("/doctor/archive", response_class=HTMLResponse)
 def archive_home(request: Request):
     if "user" not in request.session or request.session["user"]["role"] != "admin":
@@ -130,37 +130,43 @@ def archive_months(modality: str, request: Request, db: Session = Depends(get_db
     if "user" not in request.session or request.session["user"]["role"] != "admin":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     try:
-        records = db.query(PatientRecord).filter(PatientRecord.modality.ilike(modality)).all()
-        months = sorted(list(set([str(r.created_at)[:7] for r in records if r.created_at and len(str(r.created_at)) >= 7])), reverse=True)
+        records = db.query(PatientRecord).all()
+        mod_records = [r for r in records if r.modality and r.modality.strip().lower() == modality.strip().lower()]
+        months = sorted(list(set([str(r.created_at)[:7] for r in mod_records if r.created_at and len(str(r.created_at)) >= 7])), reverse=True)
+        
         template = env.get_template("archive_months.html")
         return HTMLResponse(content=template.render(request=request, modality=modality, months=months, user=request.session["user"]))
     except Exception as e:
-        return HTMLResponse(content=f"<h3>خطأ في الأرشيف (الشهور):</h3><pre>{str(e)}</pre>", status_code=500)
+        return HTMLResponse(content=f"<div style='direction:rtl; font-family:Tahoma; padding:30px; color:red;'><h3>خطأ في الأرشيف (الشهور):</h3><pre>{str(e)}</pre></div>", status_code=500)
 
 @app.get("/doctor/archive/{modality}/{month}", response_class=HTMLResponse)
 def archive_days(modality: str, month: str, request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "admin":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     try:
-        records = db.query(PatientRecord).filter(PatientRecord.modality.ilike(modality)).all()
-        month_records = [r for r in records if r.created_at and str(r.created_at).startswith(month)]
+        records = db.query(PatientRecord).all()
+        mod_records = [r for r in records if r.modality and r.modality.strip().lower() == modality.strip().lower()]
+        month_records = [r for r in mod_records if r.created_at and str(r.created_at).startswith(month)]
         days = sorted(list(set([str(r.created_at)[:10] for r in month_records if len(str(r.created_at)) >= 10])), reverse=True)
+        
         template = env.get_template("archive_days.html")
         return HTMLResponse(content=template.render(request=request, modality=modality, month=month, days=days, user=request.session["user"]))
     except Exception as e:
-        return HTMLResponse(content=f"<h3>خطأ في الأرشيف (الأيام):</h3><pre>{str(e)}</pre>", status_code=500)
+        return HTMLResponse(content=f"<div style='direction:rtl; font-family:Tahoma; padding:30px; color:red;'><h3>خطأ في الأرشيف (الأيام):</h3><pre>{str(e)}</pre></div>", status_code=500)
 
 @app.get("/doctor/archive/{modality}/{month}/{day}", response_class=HTMLResponse)
 def archive_records(modality: str, month: str, day: str, request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "admin":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     try:
-        records = db.query(PatientRecord).filter(PatientRecord.modality.ilike(modality)).all()
-        day_records = [r for r in records if r.created_at and str(r.created_at).startswith(day)]
+        records = db.query(PatientRecord).all()
+        mod_records = [r for r in records if r.modality and r.modality.strip().lower() == modality.strip().lower()]
+        day_records = [r for r in mod_records if r.created_at and str(r.created_at).startswith(day)]
+        
         template = env.get_template("archive_records.html")
         return HTMLResponse(content=template.render(request=request, modality=modality, month=month, day=day, records=day_records, user=request.session["user"]))
     except Exception as e:
-        return HTMLResponse(content=f"<h3>خطأ في الأرشيف (السجلات):</h3><pre>{str(e)}</pre>", status_code=500)
+        return HTMLResponse(content=f"<div style='direction:rtl; font-family:Tahoma; padding:30px; color:red;'><h3>خطأ في الأرشيف (السجلات):</h3><pre>{str(e)}</pre></div>", status_code=500)
 
 @app.get("/secretary", response_class=HTMLResponse)
 def secretary_dashboard(request: Request, db: Session = Depends(get_db)):
@@ -237,8 +243,7 @@ async def technician_upload(
     db: Session = Depends(get_db)
 ):
     user = request.session.get("user")
-    if not user or user["role"] != "technician":
-        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+    if not user or user["role"] != "technician":return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
 
     try:
         os.makedirs("static/uploads", exist_ok=True)
