@@ -12,15 +12,13 @@ import datetime
 import qrcode
 from PIL import Image
 
-# إعداد قاعدة البيانات وتجنب مشاكل الخيوط المتعددة في SQLite
 SQLALCHEMY_DATABASE_URL = "sqlite:///./medical_pacs.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# جدول السجلات الطبية للمرضى
 class PatientRecord(Base):
-    __tablename__: str = "patient_records"
+    __tablename__ = "patient_records"
 
     id = Column(Integer, primary_key=True, index=True)
     patient_name = Column(String, index=True)
@@ -35,23 +33,17 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# إضافة وسيط البروكسي لضمان عمل الجلسات خلف بروتوكول HTTPS على Render
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
-
-# إضافة وسيط الجلسات لإدارة الصلاحيات
 app.add_middleware(SessionMiddleware, secret_key="super-secret-key-medical-pacs-system")
 
-# التأكد من إنشاء المجلدات الأساسية تلقائياً
 os.makedirs("static/uploads", exist_ok=True)
 os.makedirs("static/qrs", exist_ok=True)
 os.makedirs("templates", exist_ok=True)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# محرك قوالب Jinja2
 env = Environment(loader=FileSystemLoader("templates"))
 
-# قاموس المستخدمين والصلاحيات
 USERS = {
     "ct_user": {"password": "123", "role": "technician", "modality": "CT", "name": "فني الطبقي المحوري"},
     "mri_user": {"password": "123", "role": "technician", "modality": "MRI", "name": "فني الرنين المغناطيسي"},
@@ -68,7 +60,6 @@ def get_db():
     finally:
         db.close()
 
-# 1. مسار الجذر وتسجيل الدخول
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request):
     if "user" in request.session:
@@ -107,7 +98,6 @@ def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
 
-# 2. لوحة تحكم الطبيب (الأدمن)
 @app.get("/doctor", response_class=HTMLResponse)
 def doctor_dashboard(request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "admin":
@@ -117,7 +107,6 @@ def doctor_dashboard(request: Request, db: Session = Depends(get_db)):
     template = env.get_template("doctor.html")
     return HTMLResponse(content=template.render(request=request, records=records, user=request.session["user"]))
 
-# 3. لوحة تحكم السكرتارية
 @app.get("/secretary", response_class=HTMLResponse)
 def secretary_dashboard(request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "secretary":
@@ -145,7 +134,6 @@ def save_report(
     db.commit()
     return RedirectResponse(url="/secretary", status_code=status.HTTP_303_SEE_OTHER)
 
-# 4. لوحة تحكم الفني (رفع الصور ومعالجتها مع كشف الأخطاء)
 @app.get("/technician", response_class=HTMLResponse)
 def technician_dashboard(request: Request):
     if "user" not in request.session or request.session["user"]["role"] != "technician":
@@ -165,7 +153,7 @@ async def technician_upload(
 ):
     try:
         if "user" not in request.session:
-            return HTMLResponse(content="<h3>خطأ: انتهت الجلسة. يرجى <a href='/login'>تسجيل الدخول مجدداً</a>.</h3>", status_code=401)
+            return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
 
         os.makedirs("static/uploads", exist_ok=True)
         os.makedirs("static/qrs", exist_ok=True)
@@ -212,9 +200,8 @@ async def technician_upload(
         import traceback
         err_details = traceback.format_exc()
         print("UPLOAD ERROR:", err_details)
-        return HTMLResponse(content=f"<h3 style='color:red;'>حدث خطأ أثناء الرفع:</h3><pre>{err_details}</pre>", status_code=500)
+        return HTMLResponse(content=f"<h3 style='color:red;'>خطأ في السيرفر أثناء الرفع:</h3><pre>{err_details}</pre>", status_code=500)
 
-# 5. صفحة عرض السجل الطبي للمريض عبر الـ QR
 @app.get("/patient/{record_id}", response_class=HTMLResponse)
 def print_record(record_id: int, request: Request, db: Session = Depends(get_db)):
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
