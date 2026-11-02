@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>أرشيف الأيام - شهر {{ month }}</title>
+    <style>
+        body { font-family: Tahoma, sans-serif; background: #f8fafc; margin: 0; padding: 40px; color: #1e293b; }
+        .container { max-width: 700px; background: white; margin: auto; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); text-align: center; border: 1px solid #e2e8f0; }
+        h2 { color: #1e3a8a; margin-bottom: 25px; font-size: 20px; }
+        .list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 30px; }
+        .item { background: #f8fafc; padding: 14px 20px; border-radius: 8px; text-decoration: none; color: #334155; font-size: 15px; font-weight: bold; border: 1px solid #cbd5e1; transition: all 0.2s ease; display: block; }
+        .item:hover { background: #eff6ff; color: #1e3a8a; border-color: #3b82f6; }
+        .empty-msg { color: #64748b; font-size: 14px; padding: 20px; }
+        .back-link { color: #2563eb; text-decoration: none; font-weight: bold; font-size: 14px; }
+        .back-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>أرشيف شهر ({{ month }}): اختر اليوم</h2>
+        
+        <div class="list">
+            {% if days %}
+                {% for d in days %}
+                    <a href="/doctor/archive/{{ modality }}/{{ month }}/{{ d }}" class="item">📆 يوم: {{ d }}</a>
+                {% endfor %}
+            {% else %}
+                <div class="empty-msg">لا توجد أيام مسجلة في هذا الشهر.</div>
+            {% endif %}
+        </div>
+        
+        <a href="/doctor/archive/{{ modality }}" class="back-link">⬅ العودة لاختيار الشهور</a>
+    </div>
+</body>
+</html>
