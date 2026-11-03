@@ -11,6 +11,7 @@ import shutil
 import datetime
 import qrcode
 from PIL import Image
+from typing import List
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./medical_pacs.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
@@ -24,7 +25,7 @@ class PatientRecord(Base):
     patient_name = Column(String, index=True)
     birth_date = Column(String)
     modality = Column(String)
-    image_path = Column(String)
+    image_path = Column(String)  # لتخزين مسارات الصور واللقطات المتحركة مفصولة بفاصلة
     report = Column(String, default="بانتظار كتابة التقرير الطبي من السكرتارية...")
     qr_code = Column(String)
     created_at = Column(String, default=str(datetime.datetime.now()))
@@ -60,7 +61,6 @@ def get_db():
     finally:
         db.close()
 
-# --- دالة التنظيف التلقائي (30 يوم) ---
 def cleanup_old_records(db: Session):
     try:
         threshold_date = datetime.datetime.now() - datetime.timedelta(days=30)
@@ -71,9 +71,10 @@ def cleanup_old_records(db: Session):
                     record_date = datetime.datetime.strptime(record.created_at.split(".")[0], "%Y-%m-%d %H:%M:%S")
                     if record_date < threshold_date:
                         if record.image_path:
-                            img_file = record.image_path.lstrip("/")
-                            if os.path.exists(img_file):
-                                os.remove(img_file)
+                            for p in record.image_path.split(","):
+                                img_file = p.strip().lstrip("/")
+                                if os.path.exists(img_file):
+                                    os.remove(img_file)
                         if record.qr_code and record.qr_code != "temp.png":
                             qr_file = f"static/qrs/{record.qr_code}"
                             if os.path.exists(qr_file):
@@ -93,7 +94,8 @@ def read_root(request: Request):
             return RedirectResponse(url="/technician", status_code=status.HTTP_303_SEE_OTHER)
         elif role == "secretary":
             return RedirectResponse(url="/secretary", status_code=status.HTTP_303_SEE_OTHER)
-        elif role == "admin":return RedirectResponse(url="/doctor", status_code=status.HTTP_303_SEE_OTHER)
+        elif role == "admin":
+            return RedirectResponse(url="/doctor", status_code=status.HTTP_303_SEE_OTHER)
     
     template = env.get_template("login.html")
     return HTMLResponse(content=template.render(request=request))
@@ -128,7 +130,6 @@ def doctor_dashboard(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     
     cleanup_old_records(db)
-    
     records = db.query(PatientRecord).all()
     template = env.get_template("doctor.html")
     return HTMLResponse(content=template.render(request=request, records=records, user=request.session["user"]))
@@ -140,9 +141,10 @@ def doctor_delete_record(record_id: int, request: Request, db: Session = Depends
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
     if record:
         if record.image_path:
-            img_file = record.image_path.lstrip("/")
-            if os.path.exists(img_file):
-                os.remove(img_file)
+            for p in record.image_path.split(","):
+                img_file = p.strip().lstrip("/")
+                if os.path.exists(img_file):
+                    os.remove(img_file)
         if record.qr_code and record.qr_code != "temp.png":
             qr_file = f"static/qrs/{record.qr_code}"
             if os.path.exists(qr_file):
@@ -169,8 +171,7 @@ def archive_home(request: Request):
         p { color: #64748b; margin-bottom: 30px; font-size: 14px; }
         .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 30px; }
         .card { background: #f1f5f9; border: 1px solid #cbd5e1; padding: 25px; border-radius: 8px; text-decoration: none; color: #1e3a8a; font-weight: bold; font-size: 18px; transition: 0.2s; display: block; }
-        .card:hover { background: #1e3a8a; color: white; transform: translateY(-2px); }
-        .btn-back { background: #64748b; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; }
+        .card:hover { background: #1e3a8a; color: white; transform: translateY(-2px); }.btn-back { background: #64748b; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; }
     </style>
 </head>
 <body>
@@ -197,7 +198,6 @@ def archive_months(modality: str, request: Request, db: Session = Depends(get_db
         records = db.query(PatientRecord).all()
         mod_records = [r for r in records if r.modality and r.modality.strip().lower() == modality.strip().lower()]
         months = sorted(list(set([str(r.created_at)[:7] for r in mod_records if r.created_at and len(str(r.created_at)) >= 7])), reverse=True)
-        
         months_html = "".join([f'<a href="/doctor/archive/{modality}/{m}" class="item">📅 شهر: {m}</a>' for m in months]) if months else '<div class="no-data">لا توجد سجلات مسجلة لهذا الجهاز.</div>'
 
         html_content = f"""<!DOCTYPE html>
@@ -237,7 +237,6 @@ def archive_days(modality: str, month: str, request: Request, db: Session = Depe
         mod_records = [r for r in records if r.modality and r.modality.strip().lower() == modality.strip().lower()]
         month_records = [r for r in mod_records if r.created_at and str(r.created_at).startswith(month)]
         days = sorted(list(set([str(r.created_at)[:10] for r in month_records if len(str(r.created_at)) >= 10])), reverse=True)
-        
         days_html = "".join([f'<a href="/doctor/archive/{modality}/{month}/{d}" class="item">📆 يوم: {d}</a>' for d in days]) if days else '<div class="no-data">لا توجد سجلات في هذا الشهر.</div>'
 
         html_content = f"""<!DOCTYPE html>
@@ -280,13 +279,18 @@ def archive_records(modality: str, month: str, day: str, request: Request, db: S
         rows_html = ""
         if day_records:
             for record in day_records:
+                images_links = ""
+                if record.image_path:
+                    for idx, p in enumerate(record.image_path.split(","), 1):
+                        images_links += f'<a href="{p.strip()}" target="_blank" class="btn" style="background:#0284c7; margin:2px; display:inline-block;">صورة/لقطة {idx}</a>'
+                
                 qr_element = f'<img src="/static/qrs/{record.qr_code}" class="qr-img" alt="QR">' if record.qr_code and record.qr_code != "temp.png" else '<span>-</span>'
                 rows_html += f"""
                 <tr>
                     <td><b>#{record.id}</b></td>
                     <td>{record.patient_name}</td>
                     <td>{record.birth_date}</td>
-                    <td><a href="{record.image_path}" target="_self" class="btn">عرض الصورة</a></td>
+                    <td>{images_links}</td>
                     <td>{qr_element}</td>
                     <td>
                         <form action="/save-report" method="post" onsubmit="return confirm('حفظ التقرير؟');">
@@ -297,12 +301,16 @@ def archive_records(modality: str, month: str, day: str, request: Request, db: S
                     </td>
                     <td>
                         <a href="/download-report/{record.id}" class="btn" style="background: #0284c7; margin-bottom: 5px; display: block;">Word</a>
-                        <a href="/patient/{record.id}" target="_blank" class="btn" style="background: #9333ea; display: block;">QR</a>
+                        <a href="/patient/{record.id}" target="_blank" class="btn" style="background: #9333ea; display: block; margin-bottom: 5px;">QR</a>
+                        <form action="/doctor/delete/{record.id}" method="post" onsubmit="return confirm('هل أنت متأكد من حذف هذا السجل وصوره نهائياً؟');">
+                            <button type="submit" class="btn" style="background: #dc2626; border:none; cursor:pointer; width:100%;">حذف السجل</button>
+                        </form>
                     </td>
                 </tr>"""
         else:
             rows_html = '<tr><td colspan="7" style="padding: 30px; color: #64748b;">لا توجد سجلات في هذا اليوم.</td></tr>'
-            html_content = f"""<!DOCTYPE html>
+
+        html_content = f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -331,7 +339,7 @@ def archive_records(modality: str, month: str, day: str, request: Request, db: S
                     <th>رقم السجل</th>
                     <th>اسم المريض</th>
                     <th>تاريخ الولادة</th>
-                    <th>صورة الفحص</th>
+                    <th>صور/لقطات الفحص</th>
                     <th>رمز الـ QR</th>
                     <th>التقرير الطبي التشخيصي</th>
                     <th>الإجراءات</th>
@@ -347,7 +355,6 @@ def archive_records(modality: str, month: str, day: str, request: Request, db: S
     except Exception as e:
         return HTMLResponse(content=f"<div style='direction:rtl; padding:30px; color:red;'><h3>خطأ:</h3><pre>{str(e)}</pre></div>", status_code=500)
 
-# --- مسارات السكرتارية ---
 @app.get("/secretary", response_class=HTMLResponse)
 def secretary_dashboard(request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "secretary":
@@ -406,13 +413,17 @@ def download_report(record_id: int, request: Request, db: Session = Depends(get_
         headers={"Content-Disposition": f"attachment; filename=Patient_Report_{record.id}.doc"}
     )
 
-# --- مسارات الفني ---
+# --- مسارات الفني مع دعم رفع ملفات متعددة (صور ولقطات متحركة GIF) وحذف السجلات الخاطئة ---
 @app.get("/technician", response_class=HTMLResponse)
-def technician_dashboard(request: Request):
+def technician_dashboard(request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "technician":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+    
+    user_modality = request.session["user"]["modality"]
+    records = db.query(PatientRecord).filter(PatientRecord.modality == user_modality).all()
+    
     template = env.get_template("technician.html")
-    return HTMLResponse(content=template.render(request=request, user=request.session["user"], success=request.query_params.get("success")))
+    return HTMLResponse(content=template.render(request=request, user=request.session["user"], records=records, success=request.query_params.get("success")))
 
 @app.post("/technician/upload")
 async def technician_upload(
@@ -420,7 +431,7 @@ async def technician_upload(
     patient_name: str = Form(...),
     birth_date: str = Form(...),
     modality: str = Form(...),
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(...),  # دعم اختيار ملفات متعددة (صور ولقطات)
     db: Session = Depends(get_db)
 ):
     user = request.session.get("user")
@@ -431,18 +442,23 @@ async def technician_upload(
         os.makedirs("static/uploads", exist_ok=True)
         os.makedirs("static/qrs", exist_ok=True)
 
-        safe_filename = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename.replace(' ', '_')}"
-        final_file_path = f"static/uploads/{safe_filename}"
-        
-        contents = await file.read()
-        with open(final_file_path, "wb") as f:
-            f.write(contents)
+        saved_paths = []
+        for file in files:
+            if file.filename:
+                safe_filename = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename.replace(' ', '_')}"
+                final_file_path = f"static/uploads/{safe_filename}"
+                contents = await file.read()
+                with open(final_file_path, "wb") as f:
+                    f.write(contents)
+                saved_paths.append(f"/{final_file_path}")
+
+        images_string = ",".join(saved_paths) if saved_paths else ""
 
         new_record = PatientRecord(
             patient_name=patient_name,
             birth_date=birth_date,
             modality=modality,
-            image_path=f"/{final_file_path}",
+            image_path=images_string,
             qr_code="temp.png"
         )
         db.add(new_record)
@@ -463,9 +479,30 @@ async def technician_upload(
         return RedirectResponse(url="/technician?success=1", status_code=status.HTTP_303_SEE_OTHER)
 
     except Exception as e:
-        import traceback
-        err_details = traceback.format_exc()
-        return HTMLResponse(content=f"<h3 style='color:red;'>خطأ أثناء الرفع:</h3><pre>{err_details}</pre>", status_code=500)
+     import traceback
+    err_details = traceback.format_exc()
+    return HTMLResponse(content=f"<h3 style='color:red;'>خطأ أثناء الرفع:</h3><pre>{err_details}</pre>", status_code=500)
+
+@app.post("/technician/delete/{record_id}")
+def technician_delete_record(record_id: int, request: Request, db: Session = Depends(get_db)):
+    user = request.session.get("user")
+    if not user or user["role"] != "technician":
+        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+    
+    record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
+    if record:
+        if record.image_path:
+            for p in record.image_path.split(","):
+                img_file = p.strip().lstrip("/")
+                if os.path.exists(img_file):
+                    os.remove(img_file)
+        if record.qr_code and record.qr_code != "temp.png":
+            qr_file = f"static/qrs/{record.qr_code}"
+            if os.path.exists(qr_file):
+                os.remove(qr_file)
+        db.delete(record)
+        db.commit()
+    return RedirectResponse(url="/technician", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.get("/patient/{record_id}", response_class=HTMLResponse)
 def print_record(record_id: int, request: Request, db: Session = Depends(get_db)):
