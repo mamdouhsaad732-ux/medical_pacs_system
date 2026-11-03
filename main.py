@@ -60,6 +60,34 @@ def get_db():
     finally:
         db.close()
 
+# --- دالة التنظيف التلقائي (حذف البيانات والصور والأكواد الأقدم من 30 يوم) ---
+def cleanup_old_records(db: Session):
+    try:
+        threshold_date = datetime.datetime.now() - datetime.timedelta(days=30)
+        records = db.query(PatientRecord).all()
+        for record in records:
+            if record.created_at:
+                try:
+                    record_date = datetime.datetime.strptime(record.created_at.split(".")[0], "%Y-%m-%d %H:%M:%S")
+                    if record_date < threshold_date:
+                        # حذف ملف الصورة الفعلية من القرص
+                        if record.image_path:
+                            img_file = record.image_path.lstrip("/")
+                            if os.path.exists(img_file):
+                                os.remove(img_file)
+                        # حذف ملف الـ QR الفعلي من القرص
+                        if record.qr_code and record.qr_code != "temp.png":
+                            qr_file = f"static/qrs/{record.qr_code}"
+                            if os.path.exists(qr_file):
+                                os.remove(qr_file)
+                        # حذف السجل من قاعدة البيانات
+                        db.delete(record)
+                except Exception:
+                    pass
+        db.commit()
+    except Exception:
+        pass
+
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request):
     if "user" in request.session:
@@ -103,6 +131,9 @@ def doctor_dashboard(request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "admin":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     
+    # تنفيذ عملية التنظيف التلقائي للسجلات الأقدم من 30 يوماً عند دخول الأدمن
+    cleanup_old_records(db)
+    
     records = db.query(PatientRecord).all()
     template = env.get_template("doctor.html")
     return HTMLResponse(content=template.render(request=request, records=records, user=request.session["user"]))
@@ -113,6 +144,14 @@ def doctor_delete_record(record_id: int, request: Request, db: Session = Depends
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
     if record:
+        if record.image_path:
+            img_file = record.image_path.lstrip("/")
+            if os.path.exists(img_file):
+                os.remove(img_file)
+        if record.qr_code and record.qr_code != "temp.png":
+            qr_file = f"static/qrs/{record.qr_code}"
+            if os.path.exists(qr_file):
+                os.remove(qr_file)
         db.delete(record)
         db.commit()
     return RedirectResponse(url="/doctor", status_code=status.HTTP_303_SEE_OTHER)
@@ -344,123 +383,3 @@ def secretary_dashboard(request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "secretary":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     records = db.query(PatientRecord).all()
-    template = env.get_template("secretary.html")
-    return HTMLResponse(content=template.render(request=request, records=records, user=request.session["user"], success=request.query_params.get("success")))
-
-@app.post("/save-report")
-def save_report(
-    request: Request,
-    record_id: int = Form(...),
-    report_text: str = Form(...),
-    db: Session = Depends(get_db)
-):
-    user = request.session.get("user")
-    if not user or user["role"] not in ["secretary", "admin"]:
-        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-
-    record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
-    if not record:
-        raise HTTPException(status_code=404, detail="السجل غير موجود")
-    
-    record.report = report_text
-    db.commit()
-    
-    if user["role"] == "admin":
-        return RedirectResponse(url="/doctor", status_code=status.HTTP_303_SEE_OTHER)
-    return RedirectResponse(url="/secretary?success=1", status_code=status.HTTP_303_SEE_OTHER)
-
-@app.get("/download-report/{record_id}")
-def download_report(record_id: int, request: Request, db: Session = Depends(get_db)):
-    if "user" not in request.session:
-        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-    
-    record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
-    if not record:
-        raise HTTPException(status_code=404, detail="السجل غير موجود")
-    
-    file_content = f"""========================================
-مركز التشخيص الطبي والتصوير الشعاعي
-========================================
-رقم السجل: #{record.id}
-اسم المريض: {record.patient_name}
-تاريخ الولادة: {record.birth_date}
-نوع الفحص (Modality): {record.modality}
-تاريخ الإنشاء: {record.created_at}
-----------------------------------------
-التقرير الطبي التشخيصي:
-{record.report}
-========================================
-"""
-    return Response(
-        content=file_content,
-        media_type="application/msword",
-        headers={"Content-Disposition": f"attachment; filename=Patient_Report_{record.id}.doc"}
-    )
-
-@app.get("/technician", response_class=HTMLResponse)
-def technician_dashboard(request: Request):
-    if "user" not in request.session or request.session["user"]["role"] != "technician":
-        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-    template = env.get_template("technician.html")
-    return HTMLResponse(content=template.render(request=request, user=request.session["user"], success=request.query_params.get("success")))
-
-@app.post("/technician/upload")
-async def technician_upload(
-    request: Request,
-    patient_name: str = Form(...),
-    birth_date: str = Form(...),
-    modality: str = Form(...),
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db)
-):
-    user = request.session.get("user")
-    if not user or user["role"] != "technician":
-        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-
-    try:
-        os.makedirs("static/uploads", exist_ok=True)
-        os.makedirs("static/qrs", exist_ok=True)
-
-        safe_filename = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename.replace(' ', '_')}"
-        final_file_path = f"static/uploads/{safe_filename}"
-        
-        contents = await file.read()
-        with open(final_file_path, "wb") as f:
-            f.write(contents)
-
-        new_record = PatientRecord(
-            patient_name=patient_name,
-            birth_date=birth_date,
-            modality=modality,
-            image_path=f"/{final_file_path}",
-            qr_code="temp.png"
-        )
-        db.add(new_record)
-        db.commit()
-        db.refresh(new_record)
-
-        base_url = str(request.base_url).rstrip("/")
-        qr_data = f"{base_url}/patient/{new_record.id}"
-        
-        qr_img = qrcode.make(qr_data)
-        qr_filename = f"qr_{new_record.id}.png"
-        qr_path = f"static/qrs/{qr_filename}"
-        qr_img.save(qr_path)
-
-        new_record.qr_code = qr_filename
-        db.commit()
-
-        return RedirectResponse(url="/technician?success=1", status_code=status.HTTP_303_SEE_OTHER)
-
-    except Exception as e:
-        import traceback
-        err_details = traceback.format_exc()
-        return HTMLResponse(content=f"<h3 style='color:red;'>خطأ أثناء الرفع:</h3><pre>{err_details}</pre>", status_code=500)
-
-@app.get("/patient/{record_id}", response_class=HTMLResponse)
-def print_record(record_id: int, request: Request, db: Session = Depends(get_db)):
-    record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
-    if not record:
-        return HTMLResponse(content="<div style='font-family:Tahoma; text-align:center; margin-top:50px; direction:rtl;'><h2>عذراً، السجل المطلوب غير موجود أو تم حذفه.</h2></div>", status_code=404)
-    template = env.get_template("patient.html")
-    return HTMLResponse(content=template.render(request=request, record=record))
