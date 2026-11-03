@@ -2,54 +2,104 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>لوحة الفني - رفع الفحص</title>
+    <title>لوحة تحكم الفني - {{ user.name }}</title>
     <style>
-        body { font-family: Tahoma, sans-serif; background: #f8fafc; margin: 0; padding: 40px; color: #1e293b; }
-        .container { max-width: 600px; background: white; margin: auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
-        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1e3a8a; padding-bottom: 15px; margin-bottom: 20px; }
-        .header h2 { color: #1e3a8a; margin: 0; font-size: 18px; }
-        .logout-btn { background: #ef4444; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: bold; }
+        body { font-family: Tahoma, sans-serif; background: #f8fafc; margin: 0; padding: 30px; color: #1e293b; }
+        .container { max-width: 1000px; background: white; margin: auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1e3a8a; padding-bottom: 15px; margin-bottom: 25px; }
+        .header h2 { color: #1e3a8a; margin: 0; font-size: 22px; }
+        .logout-btn { background: #dc2626; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px; }
+        .logout-btn:hover { background: #b91c1c; }
+        
+        .upload-box { background: #f1f5f9; padding: 20px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 30px; }
+        .upload-box h3 { margin-top: 0; color: #1e3a8a; font-size: 18px; }
         .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 14px; color: #334155; }
-        input[type="text"], input[type="date"], select, input[type="file"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; }
-        .btn-submit { background: #16a34a; color: white; border: none; padding: 12px; width: 100%; font-size: 16px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; margin-top: 10px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
+        input[type="text"], input[type="date"], input[type="file"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-family: Tahoma; }
+        .btn-submit { background: #16a34a; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; font-size: 15px; cursor: pointer; width: 100%; }
         .btn-submit:hover { background: #15803d; }
-        .alert-success { background: #dcfce7; color: #166534; padding: 12px; border-radius: 6px; margin-bottom: 20px; text-align: center; font-weight: bold; border: 1px solid #bbf7d0; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: center; font-size: 13px; }
+        th { background: #1e3a8a; color: white; }
+        tr:nth-child(even) { background: #f8fafc; }
+        .btn-delete { background: #dc2626; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px; }
+        .btn-delete:hover { background: #b91c1c; }
+        .success-msg { background: #dcfce7; color: #166534; padding: 12px; border-radius: 6px; margin-bottom: 20px; font-weight: bold; text-align: center; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h2>لوحة الفني - رفع صور الفحص الطبي</h2>
+            <h2>لوحة تحكم الفني: {{ user.name }} (جهاز: {{ user.modality }})</h2>
             <a href="/logout" class="logout-btn">تسجيل الخروج</a>
         </div>
 
         {% if success %}
-            <div class="alert-success">تم رفع الفحص وتوليد الـ QR بنجاح تام!</div>
+        <div class="success-msg">تم رفع الفحص وتوليد رمز الـ QR بنجاح تام!</div>
         {% endif %}
 
-        <!-- نموذج مع رسالة تأكيد قبل الإرسال -->
-        <form action="/technician/upload" method="post" enctype="multipart/form-data" onsubmit="return confirm('هل أنت متأكد من صحة بيانات المريض ورغبتك في رفع الفحص وتوليد رمز الـ QR؟');">
-            <div class="form-group">
-                <label>اسم المريض الكامل:</label>
-                <input type="text" name="patient_name" required placeholder="أدخل اسم المريض">
-            </div>
-            <div class="form-group">
-                <label>تاريخ الولادة:</label>
-                <input type="date" name="birth_date" required>
-            </div>
-            <div class="form-group">
-                <label>نوع الفحص (Modality):</label>
-                <select name="modality" required>
-                    <option value="{{ user.modality }}" selected>{{ user.modality }}</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>ملف الفحص (صورة ثابتة أو متحركة / Scan / GIF):</label>
-                <input type="file" name="file" required>
-            </div>
-            <button type="submit" class="btn-submit">رفع الفحص وتوليد الـ QR</button>
-        </form>
+        <!-- نموذج رفع الفحوصات والصور واللقطات المتحركة -->
+        <div class="upload-box">
+            <h3>رفع فحص جديد للمريض (يدعم اختيار صور متعددة أو لقطات متحركة GIFs)</h3>
+            <form action="/technician/upload" method="post" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label>اسم المريض:</label>
+                    <input type="text" name="patient_name" placeholder="أدخل اسم المريض الثلاثي" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>تاريخ الولادة:</label>
+                    <input type="date" name="birth_date" required>
+                </div>
+
+                <!-- حقل مخفي يحدد نوع الجهاز تلقائياً حسب حساب الفني -->
+                <input type="hidden" name="modality" value="{{ user.modality }}">
+
+                <div class="form-group">
+                    <label>ملفات الفحص (صور أو لقطات متحركة / اضغط Ctrl لاختيار عدة ملفات):</label>
+                    <!-- تم إضافة الخاصية multiple لتحديد أكثر من ملف واللقطات -->
+                    <input type="file" name="files" multiple required>
+                </div>
+
+                <button type="submit" class="btn-submit">رفع الفحص وتوليد رمز QR الفوري</button>
+            </form>
+        </div>
+
+        <!-- جدول السحلات الخاصة بهذا الفني لإمكانية الحذف في حال الخطأ -->
+         <h3>سجل فحوصاتك المرفوعة (يمكنك حذف أي فحص رُفع بالخطأ)[cite: 1]</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>رقم السجل</th>
+                    <th>اسم المريض</th>
+                    <th>تاريخ الولادة</th>
+                    <th>تاريخ ووقت الرفع</th>
+                    <th>إجراءات الحذف (التراجع)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if records %}
+                    {% for record in records %}
+                    <tr>
+                        <td><b>#{{ record.id }}</b></td>
+                        <td>{{ record.patient_name }}</td>
+                        <td>{{ record.birth_date }}</td>
+                        <td>{{ record.created_at }}</td>
+                        <td>
+                            <form action="/technician/delete/{{ record.id }}" method="post" onsubmit="return confirm('هل أنت متأكد من حذف هذا الفحص بالخطأ؟');">
+                                <button type="submit" class="btn-delete">حذف السجل والصور</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="5" style="padding: 20px; color: #64748b;">لم تقم برفع أي فحوصات حتى الآن.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
     </div>
 </body>
 </html>
