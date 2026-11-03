@@ -25,7 +25,7 @@ class PatientRecord(Base):
     patient_name = Column(String, index=True)
     birth_date = Column(String)
     modality = Column(String)
-    image_path = Column(String)  # لتخزين مسارات الصور واللقطات المتحركة مفصولة بفاصلة
+    image_path = Column(String)
     report = Column(String, default="بانتظار كتابة التقرير الطبي من السكرتارية...")
     qr_code = Column(String)
     created_at = Column(String, default=str(datetime.datetime.now()))
@@ -94,8 +94,7 @@ def read_root(request: Request):
             return RedirectResponse(url="/technician", status_code=status.HTTP_303_SEE_OTHER)
         elif role == "secretary":
             return RedirectResponse(url="/secretary", status_code=status.HTTP_303_SEE_OTHER)
-        elif role == "admin":
-            return RedirectResponse(url="/doctor", status_code=status.HTTP_303_SEE_OTHER)
+        elif role == "admin":return RedirectResponse(url="/doctor", status_code=status.HTTP_303_SEE_OTHER)
     
     template = env.get_template("login.html")
     return HTMLResponse(content=template.render(request=request))
@@ -153,7 +152,60 @@ def doctor_delete_record(record_id: int, request: Request, db: Session = Depends
         db.commit()
     return RedirectResponse(url="/doctor", status_code=status.HTTP_303_SEE_OTHER)
 
-# --- مسارات الأرشيف الهرمي ---
+# --- عرض جميع الصور في نفس الصفحة للأدمن (بدون روابط خارجية) ---
+@app.get("/doctor/view-images/{record_id}", response_class=HTMLResponse)
+def view_patient_images(record_id: int, request: Request, db: Session = Depends(get_db)):
+    if "user" not in request.session or request.session["user"]["role"] != "admin":
+        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+    
+    record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
+    if record is None:
+        raise HTTPException(status_code=404, detail="السجل غير موجود")
+    if not record.image_path:
+        return HTMLResponse(content="<h3 style='text-align:center; margin-top:50px; color:red; font-family:Tahoma;'>لا توجد صور متاحة لهذا السجل.</h3>", status_code=404)
+    
+    images_list = [p.strip() for p in record.image_path.split(",") if p.strip()]
+    
+    gallery_html = ""
+    for idx, img in enumerate(images_list, 1):
+        gallery_html += f"""
+        <div style="background: #ffffff; padding: 20px; border-radius: 10px; border: 1px solid #cbd5e1; box-shadow: 0 4px 15px rgba(0,0,0,0.05); text-align: center; margin-bottom: 25px;">
+            <h3 style="color: #1e3a8a; margin-bottom: 15px;">صورة / لقطة رقم ({idx} من {len(images_list)})</h3>
+            <img src="{img}" style="max-width: 100%; max-height: 550px; object-fit: contain; border-radius: 6px; border: 1px solid #e2e8f0; background: #000;" alt="فحص طبي">
+            <br><a href="{img}" target="_blank" style="background: #2563eb; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: bold; display: inline-block; margin-top: 15px;">فتح بالحجم الكامل في نافذة جديدة</a>
+        </div>
+        """
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>معاينة صور المريض: {record.patient_name}</title>
+    <style>
+        body {{ font-family: Tahoma, sans-serif; background: #f8fafc; margin: 0; padding: 40px; color: #1e293b; }}
+        .container {{ max-width: 950px; background: white; margin: auto; padding: 35px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }}
+        h2 {{ color: #1e3a8a; margin-top: 0; }}
+        .btn-back {{ background: #64748b; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 20px; }}
+        .btn-back:hover {{ background: #475569; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/doctor" class="btn-back">← العودة إلى لوحة تحكم الأدمن</a>
+        <h2>معاينة صور وفحوصات المريض: {record.patient_name} (رقم السجل: #{record.id})</h2>
+        <p style="color: #64748b; font-weight: bold;">نوع الجهاز: {record.modality} | تاريخ الرفع: {record.created_at}</p>
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 25px;">
+        <div>
+            {gallery_html}
+        </div>
+        <a href="/doctor" class="btn-back" style="margin-top: 20px;">← العودة إلى لوحة تحكم الأدمن</a>
+    </div>
+</body>
+</html>
+"""
+    return HTMLResponse(content=html_content)
+
+# --- مسارات الأرشيف ---
 @app.get("/doctor/archive", response_class=HTMLResponse)
 def archive_home(request: Request):
     if "user" not in request.session or request.session["user"]["role"] != "admin":
@@ -171,7 +223,8 @@ def archive_home(request: Request):
         p { color: #64748b; margin-bottom: 30px; font-size: 14px; }
         .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 30px; }
         .card { background: #f1f5f9; border: 1px solid #cbd5e1; padding: 25px; border-radius: 8px; text-decoration: none; color: #1e3a8a; font-weight: bold; font-size: 18px; transition: 0.2s; display: block; }
-        .card:hover { background: #1e3a8a; color: white; transform: translateY(-2px); }.btn-back { background: #64748b; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; }
+        .card:hover { background: #1e3a8a; color: white; transform: translateY(-2px); }
+        .btn-back { background: #64748b; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; }
     </style>
 </head>
 <body>
@@ -279,30 +332,25 @@ def archive_records(modality: str, month: str, day: str, request: Request, db: S
         rows_html = ""
         if day_records:
             for record in day_records:
-                images_links = ""
-                if record.image_path:
-                    for idx, p in enumerate(record.image_path.split(","), 1):
-                        images_links += f'<a href="{p.strip()}" target="_blank" class="btn" style="background:#0284c7; margin:2px; display:inline-block;">صورة/لقطة {idx}</a>'
-                
                 qr_element = f'<img src="/static/qrs/{record.qr_code}" class="qr-img" alt="QR">' if record.qr_code and record.qr_code != "temp.png" else '<span>-</span>'
                 rows_html += f"""
                 <tr>
                     <td><b>#{record.id}</b></td>
                     <td>{record.patient_name}</td>
                     <td>{record.birth_date}</td>
-                    <td>{images_links}</td>
+                    <td><a href="/doctor/view-images/{record.id}" class="btn" style="background: #0284c7;">عرض وفحص الصور</a></td>
                     <td>{qr_element}</td>
                     <td>
-                        <form action="/save-report" method="post" onsubmit="return confirm('حفظ التقرير؟');">
+                        <form action="/save-report" method="post" onsubmit="return confirm('هل أنت متأكد من حفظ التقرير الطبي؟');">
                             <input type="hidden" name="record_id" value="{record.id}">
                             <textarea name="report_text">{record.report}</textarea>
-                            <br><button type="submit" class="btn-save" style="margin-top: 5px;">حفظ</button>
+                            <br><button type="submit" class="btn-save" style="margin-top: 5px;">حفظ التقرير</button>
                         </form>
                     </td>
                     <td>
-                        <a href="/download-report/{record.id}" class="btn" style="background: #0284c7; margin-bottom: 5px; display: block;">Word</a>
+                        <a href="/download-report/{record.id}" onclick="return confirm('هل تريد حفظ وطباعة التقرير الآن؟');" class="btn" style="background: #0284c7; margin-bottom: 5px; display: block;">Word / طباعة</a>
                         <a href="/patient/{record.id}" target="_blank" class="btn" style="background: #9333ea; display: block; margin-bottom: 5px;">QR</a>
-                        <form action="/doctor/delete/{record.id}" method="post" onsubmit="return confirm('هل أنت متأكد من حذف هذا السجل وصوره نهائياً؟');">
+                        <form action="/doctor/delete/{record.id}" method="post" onsubmit="return confirm('هل أنت متأكد من حذف هذا السجل والصور نهائياً؟');">
                             <button type="submit" class="btn" style="background: #dc2626; border:none; cursor:pointer; width:100%;">حذف السجل</button>
                         </form>
                     </td>
@@ -375,7 +423,7 @@ def save_report(
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
 
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
-    if not record:
+    if record is None:
         raise HTTPException(status_code=404, detail="السجل غير موجود")
     
     record.report = report_text
@@ -391,8 +439,7 @@ def download_report(record_id: int, request: Request, db: Session = Depends(get_
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
-    if not record:
-        raise HTTPException(status_code=404, detail="السجل غير موجود")
+    if record is None:raise HTTPException(status_code=404, detail="السجل غير موجود")
     
     file_content = f"""========================================
 مركز التشخيص الطبي والتصوير الشعاعي
@@ -413,7 +460,6 @@ def download_report(record_id: int, request: Request, db: Session = Depends(get_
         headers={"Content-Disposition": f"attachment; filename=Patient_Report_{record.id}.doc"}
     )
 
-# --- مسارات الفني مع دعم رفع ملفات متعددة (صور ولقطات متحركة GIF) وحذف السجلات الخاطئة ---
 @app.get("/technician", response_class=HTMLResponse)
 def technician_dashboard(request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "technician":
@@ -431,7 +477,7 @@ async def technician_upload(
     patient_name: str = Form(...),
     birth_date: str = Form(...),
     modality: str = Form(...),
-    files: List[UploadFile] = File(...),  # دعم اختيار ملفات متعددة (صور ولقطات)
+    files: List[UploadFile] = File(...),
     db: Session = Depends(get_db)
 ):
     user = request.session.get("user")
@@ -479,9 +525,9 @@ async def technician_upload(
         return RedirectResponse(url="/technician?success=1", status_code=status.HTTP_303_SEE_OTHER)
 
     except Exception as e:
-     import traceback
-    err_details = traceback.format_exc()
-    return HTMLResponse(content=f"<h3 style='color:red;'>خطأ أثناء الرفع:</h3><pre>{err_details}</pre>", status_code=500)
+        import traceback
+        err_details = traceback.format_exc()
+        return HTMLResponse(content=f"<h3 style='color:red;'>خطأ أثناء الرفع:</h3><pre>{err_details}</pre>", status_code=500)
 
 @app.post("/technician/delete/{record_id}")
 def technician_delete_record(record_id: int, request: Request, db: Session = Depends(get_db)):
@@ -507,7 +553,7 @@ def technician_delete_record(record_id: int, request: Request, db: Session = Dep
 @app.get("/patient/{record_id}", response_class=HTMLResponse)
 def print_record(record_id: int, request: Request, db: Session = Depends(get_db)):
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
-    if not record:
+    if record is None:
         return HTMLResponse(content="<div style='font-family:Tahoma; text-align:center; margin-top:50px; direction:rtl;'><h2>عذراً، السجل المطلوب غير موجود أو تم حذفه.</h2></div>", status_code=404)
     template = env.get_template("patient.html")
     return HTMLResponse(content=template.render(request=request, record=record))
