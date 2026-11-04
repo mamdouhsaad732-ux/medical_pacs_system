@@ -510,18 +510,29 @@ def technician_delete_record(record_id: int, request: Request, db: Session = Dep
     return RedirectResponse(url="/technician", status_code=status.HTTP_303_SEE_OTHER)
 @app.get("/secretary/qr-preview/{record_id}", response_class=HTMLResponse)
 def secretary_qr_preview(record_id: int, request: Request, db: Session = Depends(get_db)):
-    if "user" not in request.session or request.session["user"]["role"] != "secretary":
+    # 1. التحقق من صلاحية السكرتارية
+    user = request.session.get("user")
+    if not user or user.get("role") != "secretary":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     
+    # 2. جلب السجل من قاعدة البيانات
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
     if not record:
         raise HTTPException(status_code=404, detail="السجل غير موجود")
     
+    # 3. سحب البيانات بأساليب آمنة تمنع انهيار السيرفر لو اختلفت أسماء الأعمدة
+    name = getattr(record, "patient_name", getattr(record, "name", "مريض غير معروف"))
+    age = getattr(record, "age", "-")
+    modality = getattr(record, "modality", "-")
+    qr_code = getattr(record, "qr_code", "temp.png")
+    report = getattr(record, "report", "لا توجد ملاحظات أو تقرير مكتوب حالياً.")
+
+    # 4. بناء صفحة HTML النظيفة للطباعة والـ QR
     html_content = f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>معاينة الـ QR والتقرير - {record.patient_name}</title>
+    <title>معاينة الـ QR والتقرير - {name}</title>
     <style>
         body {{ font-family: Tahoma, sans-serif; background: #f8fafc; padding: 30px; color: #1e293b; }}
         .card {{ max-width: 700px; background: white; margin: auto; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); text-align: center; }}
@@ -535,17 +546,17 @@ def secretary_qr_preview(record_id: int, request: Request, db: Session = Depends
     <div class="card">
         <h2>تقرير المريض ورمز الـ QR</h2>
         <hr style="border:0; border-top:1px solid #e2e8f0; margin: 15px 0;">
-        <p><strong>اسم المريض:</strong> {record.patient_name} | <strong>العمر:</strong> {record.age}</p>
-        <p><strong>نوع الفحص (Modality):</strong> {record.modality}</p>
+        <p><strong>اسم المريض:</strong> {name} | <strong>العمر:</strong> {age}</p>
+        <p><strong>نوع الفحص (Modality):</strong> {modality}</p>
         
         <div>
-            <img src="/static/qrs/{record.qr_code}" class="qr-img" alt="QR Code">
+            <img src="/static/qrs/{qr_code}" class="qr-img" alt="QR Code">
             <p style="font-size: 13px; color: #64748b;">قم بمسح الكود (Scan) عبر الهاتف لعرض الفحص</p>
         </div>
 
         <div class="report-box">
             <h4 style="margin-top: 0; color: #1e3a8a;">التقرير التشخيصي / الملاحظات:</h4>
-            <p>{record.report or "لا توجد ملاحظات أو تقرير مكتوب حالياً."}</p>
+            <p>{report}</p>
         </div>
 
         <div style="margin-top: 30px;">
