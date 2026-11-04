@@ -481,7 +481,85 @@ def secretary_dashboard(request: Request, db: Session = Depends(get_db)):
     records = db.query(PatientRecord).all()
     template = env.get_template("secretary.html")
     return HTMLResponse(content=template.render(request=request, records=records, user=request.session["user"], success=request.query_params.get("success")))
+@app.post("/technician/delete/{record_id}")
+def technician_delete_record(record_id: int, request: Request, db: Session = Depends(get_db)):
+    user = request.session.get("user")
+    if not user or user["role"] != "technician":
+        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+    
+    # البحث المباشر عن السجل برقم الـ ID وحذفه من الجدول المركزي المشترك
+    record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
+    if record:
+        # حذف الصور المادية من السيرفر
+        if record.image_path:
+            for p in record.image_path.split(","):
+                img_file = p.strip().lstrip("/")
+                if os.path.exists(img_file):
+                    os.remove(img_file)
+        
+        # حذف ملف الـ QR المادي
+        if record.qr_code and record.qr_code != "temp.png":
+            qr_file = f"static/qrs/{record.qr_code}"
+            if os.path.exists(qr_file):
+                os.remove(qr_file)
+        
+        # الحذف النهائي من قاعدة البيانات (يزول من السكرتارية والأدمن والأرشيف فوراً)
+        db.delete(record)
+        db.commit()
+        
+    return RedirectResponse(url="/technician", status_code=status.HTTP_303_SEE_OTHER)
+@app.get("/secretary/qr-preview/{record_id}", response_class=HTMLResponse)
+def secretary_qr_preview(record_id: int, request: Request, db: Session = Depends(get_db)):
+    if "user" not in request.session or request.session["user"]["role"] != "secretary":
+        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+    
+    record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="السجل غير موجود")
+    
+    # إرجاع صفحة نظيفة تحتوي فقط على بيانات المريض والـ QR والتقرير دون أي صور أو أزرار معاينة صور
+    html_content = f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>معاينة الـ QR والتقرير - {record.patient_name}</title>
+    <style>
+        body {{ font-family: Tahoma, sans-serif; background: #f8fafc; padding: 30px; color: #1e293b; }}
+        .card {{ max-width: 700px; background: white; margin: auto; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); text-align: center; }}
+        .qr-img {{ width: 220px; height: 220px; margin: 20px auto; border: 2px solid #e2e8f0; padding: 10px; border-radius: 8px; }}
+        .report-box {{ text-align: right; background: #f1f5f9; padding: 15px; border-radius: 6px; margin-top: 20px; line-height: 1.6; }}
+        .btn {{ background: #2563eb; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; text-decoration: none; display: inline-block; margin-top: 20px; }}
+        .btn-back {{ background: #64748b; margin-left: 10px; }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>تقرير المريض ورمز الـ QR</h2>
+        <hr style="border:0; border-top:1px solid #e2e8f0; margin: 15px 0;">
+        <p><strong>اسم المريض:</strong> {record.patient_name} | <strong>العمر:</strong> {record.age}</p>
+        <p><strong>نوع الفحص (Modality):</strong> {record.modality}</p>
+        
+        <!-- رمز الـ QR واضح وكبير وسهل المسح -->
+        <div>
+            <img src="/static/qrs/{record.qr_code}" class="qr-img" alt="QR Code">
+            <p style="font-size: 13px; color: #64748b;">قم بمسح الكود (Scan) عبر الهاتف لعرض الفحص</p>
+        </div>
 
+        <!-- صندوق التقرير الطبي -->
+        <div class="report-box">
+            <h4 style="margin-top: 0; color: #1e3a8a;">التقرير التشخيصي / الملاحظات:</h4>
+            <p>{record.report or "لا توجد ملاحظات أو تقرير مكتوب حالياً."}</p>
+        </div>
+
+        <div style="margin-top: 30px;">
+            <a href="/secretary" class="btn btn-back">← العودة إلى لوحة السكرتارية</a>
+            <button onclick="window.print()" class="btn">طباعة التقرير والـ QR</button>
+        </div>
+    </div>
+</body>
+</html>
+"""
+    return HTMLResponse(content=html_content)
 @app.post("/save-report")
 def save_report(
     request: Request,
@@ -606,28 +684,27 @@ def technician_delete_record(record_id: int, request: Request, db: Session = Dep
     if not user or user["role"] != "technician":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     
-    # البحث عن السجل مباشرة برقم الـ ID بغض النظر عن أي قيود أخرى لضمان الحذف الشامل
+    # البحث المباشر عن السجل برقم الـ ID وحذفه من الجدول المركزي المشترك
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
     if record:
-        # 1. حذف جميع ملفات الصور المادية المرتبطة بالفحص من السيرفر
+        # حذف الصور المادية من السيرفر
         if record.image_path:
             for p in record.image_path.split(","):
                 img_file = p.strip().lstrip("/")
                 if os.path.exists(img_file):
                     os.remove(img_file)
         
-        # 2. حذف ملف الـ QR المرتبط بالسجل من السيرفر
+        # حذف ملف الـ QR المادي
         if record.qr_code and record.qr_code != "temp.png":
             qr_file = f"static/qrs/{record.qr_code}"
             if os.path.exists(qr_file):
                 os.remove(qr_file)
         
-        # 3. حذف السجل نهائياً من قاعدة البيانات (ليختفي فوراً من لوحة السكرتاريا، الأدمن، والأرشيف)
+        # الحذف النهائي من قاعدة البيانات (يزول من السكرتارية والأدمن والأرشيف فوراً)
         db.delete(record)
         db.commit()
         
     return RedirectResponse(url="/technician", status_code=status.HTTP_303_SEE_OTHER)
-
 @app.get("/patient/{record_id}", response_class=HTMLResponse)
 def print_record(record_id: int, request: Request, db: Session = Depends(get_db)):
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
