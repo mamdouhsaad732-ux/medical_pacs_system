@@ -517,7 +517,6 @@ def secretary_qr_preview(record_id: int, request: Request, db: Session = Depends
     if not record:
         raise HTTPException(status_code=404, detail="السجل غير موجود")
     
-    # إرجاع صفحة نظيفة تحتوي فقط على بيانات المريض والـ QR والتقرير دون أي صور أو أزرار معاينة صور
     html_content = f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -539,13 +538,11 @@ def secretary_qr_preview(record_id: int, request: Request, db: Session = Depends
         <p><strong>اسم المريض:</strong> {record.patient_name} | <strong>العمر:</strong> {record.age}</p>
         <p><strong>نوع الفحص (Modality):</strong> {record.modality}</p>
         
-        <!-- رمز الـ QR واضح وكبير وسهل المسح -->
         <div>
             <img src="/static/qrs/{record.qr_code}" class="qr-img" alt="QR Code">
             <p style="font-size: 13px; color: #64748b;">قم بمسح الكود (Scan) عبر الهاتف لعرض الفحص</p>
         </div>
 
-        <!-- صندوق التقرير الطبي -->
         <div class="report-box">
             <h4 style="margin-top: 0; color: #1e3a8a;">التقرير التشخيصي / الملاحظات:</h4>
             <p>{record.report or "لا توجد ملاحظات أو تقرير مكتوب حالياً."}</p>
