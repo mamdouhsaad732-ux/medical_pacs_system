@@ -137,6 +137,7 @@ def doctor_dashboard(request: Request, db: Session = Depends(get_db)):
 def doctor_delete_record(record_id: int, request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "admin":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+    
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
     if record:
         if record.image_path:
@@ -148,8 +149,10 @@ def doctor_delete_record(record_id: int, request: Request, db: Session = Depends
             qr_file = f"static/qrs/{record.qr_code}"
             if os.path.exists(qr_file):
                 os.remove(qr_file)
+        
         db.delete(record)
         db.commit()
+        
     return RedirectResponse(url="/doctor", status_code=status.HTTP_303_SEE_OTHER)
 
 # --- عرض جميع الصور في نفس الصفحة للأدمن (بدون روابط خارجية) ---
@@ -166,20 +169,31 @@ def view_patient_images(record_id: int, request: Request, db: Session = Depends(
     
     images_list = [p.strip() for p in record.image_path.split(",") if p.strip()]
     
-    gallery_html = ""
+    # 1. بناء شبكة الصور الأفقية المصغرة
+    thumbnails_html = ""
     for idx, img in enumerate(images_list, 1):
-        gallery_html += f"""
-        <div id="img-card-{idx}" class="image-card" style="display: {'block' if idx == 1 else 'none'}; background: #ffffff; padding: 25px; border-radius: 12px; border: 1px solid #cbd5e1; box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center; margin-bottom: 25px;">
-            <h3 style="color: #1e3a8a; margin-bottom: 15px;">صورة / لقطة رقم ({idx} من {len(images_list)})</h3>
-            <div style="margin-bottom: 15px;">
-                <img src="{img}" style="max-width: 100%; max-height: 550px; object-fit: contain; border-radius: 6px; border: 1px solid #e2e8f0; background: #000;" alt="فحص طبي">
+        thumbnails_html += f"""
+        <div onclick="openLightbox({idx})" style="cursor: pointer; background: white; border: 2px solid #cbd5e1; border-radius: 8px; padding: 10px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); transition: 0.2s;" onmouseover="this.style.borderColor='#2563eb'" onmouseout="this.style.borderColor='#cbd5e1'">
+            <img src="{img}" style="width: 160px; height: 120px; object-fit: cover; border-radius: 4px; background: #000;" alt="صورة مصغرة">
+            <p style="margin: 8px 0 0 0; font-size: 13px; font-weight: bold; color: #1e3a8a;">صورة ({idx} / {len(images_list)})</p>
+        </div>
+        """
+
+    # 2. بناء عناصر العرض الكامل (Lightbox) لكل صورة مع أزرار التنقل والإغلاق
+    lightbox_items_html = ""
+    for idx, img in enumerate(images_list, 1):
+        lightbox_items_html += f"""
+        <div id="lightbox-item-{idx}" class="lightbox-slide" style="display: none; text-align: center;">
+            <h3 style="color: #fff; margin-bottom: 15px;">صورة رقم ({idx} من {len(images_list)})</h3>
+            <div style="margin-bottom: 20px;">
+                <img src="{img}" style="max-width: 90vw; max-height: 70vh; object-fit: contain; border-radius: 6px; border: 2px solid #475569; background: #000;" alt="عرض كامل">
             </div>
-            <div style="display: flex; justify-content: center; gap: 15px; align-items: center; margin-top: 15px;">
-                <button onclick="showImage({idx - 1})" class="nav-btn" style="background: #475569; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; {'visibility: hidden;' if idx == 1 else ''}">← الصورة السابقة</button>
-                <span style="font-weight: bold; color: #64748b;">({idx} / {len(images_list)})</span>
-                <button onclick="showImage({idx + 1})" class="nav-btn" style="background: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; {'visibility: hidden;' if idx == len(images_list) else ''}">الصورة التالية →</button>
+            <div style="display: flex; justify-content: center; gap: 20px; align-items: center;">
+                <button onclick="changeSlide({idx - 1})" class="nav-btn" style="background: #475569; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; {'visibility: hidden;' if idx == 1 else ''}">← الصورة السابقة</button>
+                <span style="color: white; font-weight: bold; font-size: 16px;">({idx} / {len(images_list)})</span>
+                <button onclick="changeSlide({idx + 1})" class="nav-btn" style="background: #2563eb; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; {'visibility: hidden;' if idx == len(images_list) else ''}">الصورة التالية →</button>
             </div>
-            <br><a href="{img}" target="_blank" style="background: #0284c7; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: bold; display: inline-block; margin-top: 10px;">فتح بالحجم الكامل في نافذة جديدة</a>
+            <br><a href="{img}" target="_blank" style="background: #0284c7; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: bold; display: inline-block; margin-top: 15px;">فتح بالحجم الكامل في نافذة جديدة</a>
         </div>
         """
 
@@ -190,21 +204,43 @@ def view_patient_images(record_id: int, request: Request, db: Session = Depends(
     <title>معاينة صور المريض: {record.patient_name}</title>
     <style>
         body {{ font-family: Tahoma, sans-serif; background: #f8fafc; margin: 0; padding: 40px; color: #1e293b; }}
-        .container {{ max-width: 1000px; background: white; margin: auto; padding: 35px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; position: relative; }}
-        .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
-        .btn-back {{ background: #64748b; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; }}
-        .btn-close {{ background: #dc2626; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; }}
+        .container {{ max-width: 1100px; background: white; margin: auto; padding: 35px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }}
+        h2 {{ color: #1e3a8a; margin-top: 0; }}
+        .btn-back {{ background: #64748b; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 20px; }}
         .btn-back:hover {{ background: #475569; }}
-        .btn-close:hover {{ background: #b91c1c; }}
+        .grid-container {{ display: flex; flex-wrap: wrap; gap: 20px; margin-top: 20px; }}
+        
+        /* تصميم نافذة العرض الكامل (Lightbox) */
+        #lightbox-modal {{ display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; }}
+        .close-btn {{ position: absolute; top: 25px; left: 35px; background: #dc2626; color: white; border: none; padding: 10px 20px; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; }}
+        .close-btn:hover {{ background: #b91c1c; }}
     </style>
     <script>
-        function showImage(targetIdx) {{
-            const totalImages = {len(images_list)};
-            if (targetIdx < 1 || targetIdx > totalImages) return;
+        let currentIndex = 1;
+        const totalImages = {len(images_list)};
+
+        function openLightbox(idx) {{
+            currentIndex = idx;
+            document.getElementById('lightbox-modal').style.display = 'flex';
+            showSlide(currentIndex);
+        }}
+
+        function closeLightbox() {{
+            document.getElementById('lightbox-modal').style.display = 'none';
+        }}
+
+        function changeSlide(directionIdx) {{
+            if (directionIdx >= 1 && directionIdx <= totalImages) {{
+                currentIndex = directionIdx;
+                showSlide(currentIndex);
+            }}
+        }}
+
+        function showSlide(idx) {{
             for (let i = 1; i <= totalImages; i++) {{
-                const card = document.getElementById('img-card-' + i);
-                if (card) {{
-                    card.style.display = (i === targetIdx) ? 'block' : 'none';
+                const slide = document.getElementById('lightbox-item-' + i);
+                if (slide) {{
+                    slide.style.display = (i === idx) ? 'block' : 'none';
                 }}
             }}
         }}
@@ -212,26 +248,34 @@ def view_patient_images(record_id: int, request: Request, db: Session = Depends(
 </head>
 <body>
     <div class="container">
-        <div class="top-bar">
-            <a href="/doctor" class="btn-back">← العودة إلى لوحة التحكم</a>
-            <a href="/doctor" class="btn-close">✕ إغلاق (X)</a>
-        </div>
+        <!-- زر العودة للوحة تحكم الأدمن -->
+        <a href="/doctor" class="btn-back">← العودة إلى لوحة تحكم الأدمن</a>
         <h2>معاينة صور وفحوصات المريض: {record.patient_name} (رقم السجل: #{record.id})</h2>
         <p style="color: #64748b; font-weight: bold;">نوع الجهاز: {record.modality} | تاريخ الرفع: {record.created_at}</p>
-        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 25px;">
-        <div>
-            {gallery_html}
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 20px;">
+        
+        <p style="color: #334155; font-weight: bold;">انقر على أي صورة أدناه لعرضها بالحجم الكامل والتنقل بينها:</p>
+        
+        <!-- شبكة عرض الصور الأفقية المصغرة -->
+        <div class="grid-container">
+            {thumbnails_html}
         </div>
-        <div style="display: flex; justify-content: space-between; margin-top: 25px;">
-            <a href="/doctor" class="btn-back">← العودة إلى لوحة التحكم</a>
-            <a href="/doctor" class="btn-close">✕ إغلاق (X)</a>
+        
+        <br><br>
+        <a href="/doctor" class="btn-back">← العودة إلى لوحة تحكم الأدمن</a>
+    </div>
+
+    <!-- نافذة العرض الكامل المنبثقة (Lightbox) مع أزرار التنقل وزر الإغلاق X -->
+    <div id="lightbox-modal">
+        <button onclick="closeLightbox()" class="close-btn">✕ إغلاق (X)</button>
+        <div style="width: 100%; display: flex; justify-content: center; align-items: center;">
+            {lightbox_items_html}
         </div>
     </div>
 </body>
 </html>
 """
     return HTMLResponse(content=html_content)
-
 # --- مسارات الأرشيف ---
 @app.get("/doctor/archive", response_class=HTMLResponse)
 def archive_home(request: Request):
@@ -562,22 +606,23 @@ def technician_delete_record(record_id: int, request: Request, db: Session = Dep
     if not user or user["role"] != "technician":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     
-    # البحث عن السجل بغض النظر عن الفني، شريطة أن ينتمي لنفس موديل جهاز الفني أو يتم حذفه نهائياً
+    # البحث عن السجل مباشرة برقم الـ ID بغض النظر عن أي قيود أخرى لضمان الحذف الشامل
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
     if record:
-        # حذف ملفات الصور المادية المرتبطة بالسجل من السيرفر
+        # 1. حذف جميع ملفات الصور المادية المرتبطة بالفحص من السيرفر
         if record.image_path:
             for p in record.image_path.split(","):
                 img_file = p.strip().lstrip("/")
                 if os.path.exists(img_file):
                     os.remove(img_file)
-        # حذف ملف الـ QR المرتبطة بالسجل من السيرفر
+        
+        # 2. حذف ملف الـ QR المرتبط بالسجل من السيرفر
         if record.qr_code and record.qr_code != "temp.png":
             qr_file = f"static/qrs/{record.qr_code}"
             if os.path.exists(qr_file):
                 os.remove(qr_file)
         
-        # حذف السجل من قاعدة البيانات نهائياً ليختفي من لوحة السكرتاريا والأدمن والجميع
+        # 3. حذف السجل نهائياً من قاعدة البيانات (ليختفي فوراً من لوحة السكرتاريا، الأدمن، والأرشيف)
         db.delete(record)
         db.commit()
         
