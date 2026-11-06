@@ -129,12 +129,34 @@ def logout(request: Request):
     return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.get("/view-scan/{record_id}", response_class=HTMLResponse) 
-def view_patient_scan(record_id: int, request: Request, db: Session = Depends(get_db)): 
-  record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first() 
-  if not record or not record.dicom_file: raise HTTPException(status_code=404, detail="الفحص أو ملف الـ DICOM غير موجود")
-  dicom_url = f"/static/dicoms/{record.dicom_file}"
-  template = env.get_template("view_scan.html")
-  return HTMLResponse(content=template.render(request=request, record=record, dicom_url=dicom_url))
+def view_scan(request: Request, record_id: int, db: Session = Depends(get_db)): 
+    # 1. جلب بيانات السجل 
+    record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first() 
+    if not record: 
+        raise HTTPException(status_code=404, detail="السجل غير موجود")
+# 2. تحديد مسار المجلد الذي يحتوي على صور المريض
+    patient_dir = os.path.join("static", "dicoms", str(record_id))
+
+    dicom_urls = []
+# إذا كان هناك مجلد برقم السجل، نجمع كافة ملفات DICOM من داخله
+    if os.path.exists(patient_dir):
+     files = sorted(os.listdir(patient_dir))
+     dicom_urls = [f"/static/dicoms/{record_id}/{f}" for f in files if not f.startswith('.')]
+
+# إذا لم يكن المجلد موجوداً، نتحقق مما إذا كان هناك ملف مائل مباشر ينتهي بـ .dcm
+    if not dicom_urls:
+        
+     direct_file = os.path.join("static", "dicoms", f"{record_id}.dcm")
+    if os.path.exists(direct_file):
+        dicom_urls = [f"/static/dicoms/{record_id}.dcm"]
+
+# 3. تمرير قائمة الروابط الكاملة إلى الواجهة
+    template = env.get_template("view_scan.html")
+    return HTMLResponse(content=template.render(
+    request=request, 
+    record=record, 
+    dicom_urls=dicom_urls
+))
 
 @app.get("/doctor", response_class=HTMLResponse)
 def doctor_dashboard(request: Request, db: Session = Depends(get_db)):
