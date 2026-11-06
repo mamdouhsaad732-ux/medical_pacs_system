@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from jinja2 import Environment, FileSystemLoader
-from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy import create_engine, Column, Integer, String, true
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 import os
 import shutil
@@ -29,13 +29,16 @@ class PatientRecord(Base):
     report = Column(String, default="بانتظار كتابة التقرير الطبي من السكرتارية...")
     qr_code = Column(String)
     created_at = Column(String, default=str(datetime.datetime.now()))
+    dicom_file=Column(String,nullable=true)
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 app.add_middleware(SessionMiddleware, secret_key="medical-pacs-super-secret-production-key-2026")
+app.mout("/static", StaticFiles(directory="static"), name="static")
 
 os.makedirs("static/uploads", exist_ok=True)
 os.makedirs("static/qrs", exist_ok=True)
@@ -43,7 +46,9 @@ os.makedirs("templates", exist_ok=True)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+
 env = Environment(loader=FileSystemLoader("templates"))
+
 
 USERS = {
     "ct_user": {"password": "123", "role": "technician", "modality": "CT", "name": "فني الطبقي المحوري"},
@@ -123,11 +128,18 @@ def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
 
+@app.get("/view-scan/{record_id}", response_class=HTMLResponse) 
+def view_patient_scan(record_id: int, request: Request, db: Session = Depends(get_db)): 
+  record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first() 
+  if not record or not record.dicom_file: raise HTTPException(status_code=404, detail="الفحص أو ملف الـ DICOM غير موجود")
+  dicom_url = f"/static/dicoms/{record.dicom_file}"
+  template = env.get_template("view_scan.html")
+  return HTMLResponse(content=template.render(request=request, record=record, dicom_url=dicom_url))
+
 @app.get("/doctor", response_class=HTMLResponse)
 def doctor_dashboard(request: Request, db: Session = Depends(get_db)):
     if "user" not in request.session or request.session["user"]["role"] != "admin":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-    
     cleanup_old_records(db)
     records = db.query(PatientRecord).all()
     template = env.get_template("doctor.html")
@@ -579,33 +591,41 @@ def secretary_qr_preview(record_id: int, request: Request, db: Session = Depends
 </html>
 """
     return HTMLResponse(content=html_content)
-@app.post("/save-report-inline")
-def save_report_inline(
-    record_id: int = Form(...),
-    report: str = Form(...),
-    db: Session = Depends(get_db)
-):
-    # 1. البحث عن السجل
-    record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
-    if not record:
-        raise HTTPException(status_code=404, detail="السجل غير موجود")
-    
-    # 2. تحديث التقرير وحفظه
-    record.report = report
-    db.commit()
-    
-    # 3. العودة إلى نفس صفحة المعاينة للمريض
-    return RedirectResponse(url=f"/secretary/qr-preview/{record_id}", status_code=status.HTTP_303_SEE_OTHER)
-    record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
-    if record is None:
-        raise HTTPException(status_code=404, detail="السجل غير موجود")
-    
-    record.report = report_text
-    db.commit()
-    
-    if user["role"] == "admin":
-        return RedirectResponse(url="/doctor", status_code=status.HTTP_303_SEE_OTHER)
-    return RedirectResponse(url="/secretary?success=1", status_code=status.HTTP_303_SEE_OTHER)
+def generate_patient_qr(record_id: int): 
+    base_url = "http://127.0.0.1:8000" 
+    scan_url = f"{base_url}/view-scan/{record_id}"
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(scan_url)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white")
+
+    qr_filename = f"qr_{record_id}.png"
+    save_path = os.path.join("static", "qrs", qr_filename)
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    img.save(save_path)
+
+    return qr_filename
+
+@app.post("/save-report-inline") 
+def save_report_inline( 
+    record_id: int = Form(...), 
+    report: str = Form(...), 
+    db: Session = Depends(get_db) ): 
+ # 1. البحث عن السجل 
+  record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first() 
+  if not record: 
+      raise HTTPException(status_code=404, detail="السجل غير موجود")
+# 2. تحديث التقرير وحفظه
+  record.report = report
+  db.commit()
+
+# 3. توليد وتخزين رمز الـ QR الخاص بهذا السجل تلقائياً
+  record.qr_code = generate_patient_qr(record.id)
+  db.commit()
+
+# 4. العودة إلى نفس صفحة المعاينة للمريض
+  return RedirectResponse(url=f"/secretary/qr-preview/{record_id}", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.get("/download-report/{record_id}")
 def download_report(record_id: int, request: Request, db: Session = Depends(get_db)):
@@ -737,3 +757,19 @@ def print_record(record_id: int, request: Request, db: Session = Depends(get_db)
         return HTMLResponse(content="<div style='font-family:Tahoma; text-align:center; margin-top:50px; direction:rtl;'><h2>عذراً، السجل المطلوب غير موجود أو تم حذفه.</h2></div>", status_code=404)
     template = env.get_template("patient.html")
     return HTMLResponse(content=template.render(request=request, record=record))
+
+    def generate_patient_qr(record_id: int): 
+     base_url = "http://127.0.0.1:8000" 
+    scan_url = f"{base_url}/view-scan/{record_id}"
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(scan_url)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white")
+
+    qr_filename = f"qr_{record_id}.png"
+    save_path = os.path.join("static", "qrs", qr_filename)
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    img.save(save_path)
+
+    return qr_filename
