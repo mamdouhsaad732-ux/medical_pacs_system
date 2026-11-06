@@ -38,7 +38,7 @@ app = FastAPI()
 
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 app.add_middleware(SessionMiddleware, secret_key="medical-pacs-super-secret-production-key-2026")
-app.mout("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 os.makedirs("static/uploads", exist_ok=True)
 os.makedirs("static/qrs", exist_ok=True)
