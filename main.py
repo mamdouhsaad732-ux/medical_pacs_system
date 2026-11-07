@@ -136,7 +136,12 @@ def view_scan(request: Request, record_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="السجل غير موجود")
 # 2. تحديد مسار المجلد الذي يحتوي على صور المريض
     patient_dir = os.path.join("static", "dicoms", str(record_id))
-
+    os.makedirs(patient_dir, exist_ok=True)
+    for file in File:
+     if file.filename:
+      file_path = os.path.join(patient_dir, file.filename)
+    with open(file_path, "wb") as buffer:
+            buffer.write(file.file.read())
     dicom_urls = []
 # إذا كان هناك مجلد برقم السجل، نجمع كافة ملفات DICOM من داخله
     if os.path.exists(patient_dir):
@@ -149,7 +154,6 @@ def view_scan(request: Request, record_id: int, db: Session = Depends(get_db)):
      direct_file = os.path.join("static", "dicoms", f"{record_id}.dcm")
     if os.path.exists(direct_file):
         dicom_urls = [f"/static/dicoms/{record_id}.dcm"]
-
 # 3. تمرير قائمة الروابط الكاملة إلى الواجهة
     template = env.get_template("view_scan.html")
     return HTMLResponse(content=template.render(
