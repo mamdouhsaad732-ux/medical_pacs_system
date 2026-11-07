@@ -196,6 +196,11 @@ def doctor_delete_record(record_id: int, request: Request, db: Session = Depends
 # --- عرض جميع الصور في نفس الصفحة للأدمن (بدون روابط خارجية) ---
 @app.get("/doctor/view-images/{record_id}", response_class=HTMLResponse)
 def view_patient_images(record_id: int, request: Request, db: Session = Depends(get_db)):
+    patient_dir = os.path.join("static", "dicoms", str(record_id))
+    dicom_urls = []
+    if os.path.exists(patient_dir):
+        files = sorted(os.listdir(patient_dir))
+        dicom_urls = [f"/static/dicoms/{record_id}/{f}" for f in files if not f.startswith('.')]
     if "user" not in request.session or request.session["user"]["role"] != "admin":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     
