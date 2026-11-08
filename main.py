@@ -781,7 +781,10 @@ def technician_delete_record(record_id: int, request: Request, db: Session = Dep
         db.commit()
         
     return RedirectResponse(url="/technician", status_code=status.HTTP_303_SEE_OTHER)
-@app.get("/patient/{record_id}", response_class=HTMLResponse) def print_record(record_id: int, request: Request, db: Session = Depends(get_db)): record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first() if record is None: return HTMLResponse(content="<div style='font-family:Tahoma; text-align:center; margin-top:50px;'><h3>السجل غير موجود</h3></div>", status_code=404)
+@app.get("/patient/{record_id}", response_class=HTMLResponse) 
+def print_record(record_id: int, request: Request, db: Session = Depends(get_db)): record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first() 
+if record is None: 
+    return HTMLResponse(content="<div style='font-family:Tahoma; text-align:center; margin-top:50px;'><h3>السجل غير موجود</h3></div>", status_code=404)
 # تجميع صور الـ DICOM بأمان تام
 dicom_urls = []
 try:
