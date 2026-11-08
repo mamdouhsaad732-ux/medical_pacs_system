@@ -781,22 +781,26 @@ def technician_delete_record(record_id: int, request: Request, db: Session = Dep
         db.commit()
         
     return RedirectResponse(url="/technician", status_code=status.HTTP_303_SEE_OTHER)
-@app.get("/patient/{record_id}", response_class=HTMLResponse)
-def print_record(record_id: int, request: Request, db: Session = Depends(get_db)):
-    record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
-    if record is None:
-        return HTMLResponse(content="<div style='font-family:Tahoma; text-align:center; margin-top:50px; direction:rtl;'><h2>عذراً، السجل المطلوب غير موجود أو تم حذفه.</h2></div>", status_code=404)
-        patient_dir = os.path.join("static", "dicoms", str(record_id))
-    dicom_urls = []
+@app.get("/patient/{record_id}", response_class=HTMLResponse) def print_record(record_id: int, request: Request, db: Session = Depends(get_db)): record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first() if record is None: return HTMLResponse(content="<div style='font-family:Tahoma; text-align:center; margin-top:50px;'><h3>السجل غير موجود</h3></div>", status_code=404)
+# تجميع صور الـ DICOM بأمان تام
+dicom_urls = []
+try:
+    patient_dir = os.path.join("static", "dicoms", str(record_id))
     if os.path.exists(patient_dir):
         files = sorted(os.listdir(patient_dir))
         dicom_urls = [f"/static/dicoms/{record_id}/{f}" for f in files if not f.startswith('.')]
-    template = env.get_template("patient.html")
-    return HTMLResponse(content=template.render(request=request, record=record))
+except Exception as e:
+    print(f"Error loading dicoms: {e}")
 
+template = env.get_template("patient.html")
+return HTMLResponse(content=template.render(
+    request=request, 
+    record=record, 
+    dicom_urls=dicom_urls
+))
     def generate_patient_qr(record_id: int): 
      base_url = "http://127.0.0.1:8000" 
-    scan_url = f"{base_url}/view-scan/{record_id}"
+    scan_url = f"{base_url}/patient/{record_id}"
     qr = qrcode.QRCode(version=1, box_size=10, border=5)
     qr.add_data(scan_url)
     qr.make(fit=True)
