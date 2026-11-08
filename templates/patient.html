@@ -32,8 +32,8 @@
 <body>
     <div class="patient-container">
         <div class="header">
-            <h2>مركز التشخيص الطبي والتصوير الشعاعي</h2>
-            <p>بوابة الاستعلام الطبي والتقرير الرسمي للمريض</p>
+            <h2>مركز محردة للرنين المغناطيسي والطبقي المحوري</h2>
+            <p>بوابة الاستعلام الطبي  للمريض</p>
         </div>
         
         <div class="info-grid">
@@ -43,12 +43,6 @@
             <div><b>نوع الفحص:</b> {{ record.modality }}</div>
         </div>
         
-        <div class="report-section">
-            <b>التقرير التشخيصي المعتمد:</b>
-            <div class="report-box">
-                <p style="white-space: pre-wrap; margin: 0;">{{ record.report }}</p>
-            </div>
-        </div>
         
         <div class="image-preview-section">
     <h3>صور الأشعة الخاصة بالفحص ({{ dicom_urls|length }} صور):</h3>
