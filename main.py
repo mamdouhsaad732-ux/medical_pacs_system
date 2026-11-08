@@ -802,18 +802,19 @@ def print_record(record_id: int, request: Request, db: Session = Depends(get_db)
     record=record, 
     dicom_urls=dicom_urls
 ))
-def generate_patient_qr(record_id: int): 
-    base_url = "http://127.0.0.1:8000" 
-    scan_url = f"{base_url}/patient/{record_id}"
-    qr = qrcode.QRCode(version=1, box_size=10, border=5)
-    qr.add_data(scan_url)
-    qr.make(fit=True)
+def generate_patient_qr(record_id: int):
+    # استبدل هذا الرابط برابط موقعك الفعلي على Render لضمان صحته دائماً 
+   base_url = "https://al-pacs-system-1.onrender.com"
+   scan_url = f"{base_url}/patient/{record_id}"
+   qr = qrcode.QRCode(version=1, box_size=10, border=5)
+   qr.add_data(scan_url)
+   qr.make(fit=True)
 
-    img = qr.make_image(fill_color="black", back_color="white")
+   img = qr.make_image(fill_color="black", back_color="white")
 
-    qr_filename = f"qr_{record_id}.png"
-    save_path = os.path.join("static", "qrs", qr_filename)
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    img.save(save_path)
+   qr_filename = f"qr_{record_id}.png"
+   save_path = os.path.join("static", "qrs", qr_filename)
+   os.makedirs(os.path.dirname(save_path), exist_ok=True)
+   img.save(save_path)
 
-    return qr_filename
+   return qr_filename
