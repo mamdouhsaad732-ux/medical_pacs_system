@@ -786,21 +786,16 @@ def print_record(record_id: int, request: Request, db: Session = Depends(get_db)
     record = db.query(PatientRecord).filter(PatientRecord.id == record_id).first()
     if record is None:
      return HTMLResponse(content="<div style='font-family:Tahoma; text-align:center; margin-top:50px;'><h3>السجل غير موجود</h3></div>", status_code=404)
-# تجميع صور الـ DICOM بأمان تام
+# جلب مسارات الصور من حقل image_path مباشرة لضمان التطابق التام مع لوحة الأدمن
     dicom_urls = []
-    try:
-     patient_dir = os.path.join("static", "dicoms", str(record_id))
-     if os.path.exists(patient_dir):
-        files = sorted(os.listdir(patient_dir))
-        dicom_urls = [f"/static/dicoms/{record_id}/{f}" for f in files if not f.startswith('.')]
-    except Exception as e:
-     print(f"Error loading dicoms: {e}")
+    if record.image_path:
+      dicom_urls = [p.strip() for p in record.image_path.split(",") if p.strip()]
 
     template = env.get_template("patient.html")
     return HTMLResponse(content=template.render(
-    request=request, 
-    record=record, 
-    dicom_urls=dicom_urls
+      request=request, 
+      record=record, 
+      dicom_urls=dicom_urls
 ))
 def generate_patient_qr(record_id: int):
     # استبدل هذا الرابط برابط موقعك الفعلي على Render لضمان صحته دائماً 
