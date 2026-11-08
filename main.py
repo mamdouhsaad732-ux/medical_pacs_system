@@ -802,7 +802,7 @@ return HTMLResponse(content=template.render(
     dicom_urls=dicom_urls
 ))
     def generate_patient_qr(record_id: int): 
-     base_url = "http://127.0.0.1:8000" 
+    base_url = "http://127.0.0.1:8000" 
     scan_url = f"{base_url}/patient/{record_id}"
     qr = qrcode.QRCode(version=1, box_size=10, border=5)
     qr.add_data(scan_url)
