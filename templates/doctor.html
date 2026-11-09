@@ -76,6 +76,10 @@
                         <td>
                             <a href="/download-report/{{ record.id }}" onclick="return confirm('هل تريد تحميل وطباعة التقرير الآن؟');" class="btn" style="background: #0284c7; margin-bottom: 5px; display: block;">Word / طباعة</a>
                             <a href="/patient/{{ record.id }}" target="_blank" class="btn" style="background: #9333ea; display: block; margin-bottom: 5px;">معاينة QR</a>
+                            <!-- زر تحميل الـ QR النقي لاستخدامه في ملفات Word أو PDF للطبيب الخارجي -->
+<a href="/static/qrs/{{ record.qr_code }}" download="QR_Patient_{{ record.id }}.png" class="btn btn-success" style="margin-right: 5px; text-decoration: none; padding: 6px 12px; background-color: #28a745; color: white; border-radius: 4px; display: inline-block;">
+    <i class="fas fa-download"></i> تحميل الـ QR
+</a>
                             <!-- نموذج الحذف الشامل للأدمن -->
                             <form action="/doctor/delete/{{ record.id }}" method="post" onsubmit="return confirm('تحذير: هل أنت متأكد من حذف هذا السجل وجميع صوره نهائياً؟');">
                                 <button type="submit" class="btn" style="background: #dc2626; border:none; cursor:pointer; width:100%;">حذف السجل</button>
