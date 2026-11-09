@@ -6,3 +6,5 @@ python-multipart==0.0.9
 pillow>=10.2.0
 qrcode==7.4.2
 itsdangerous>=2.1.2
+pydicom>=2.4.4
+numpy>=1.26.0
