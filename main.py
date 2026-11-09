@@ -12,6 +12,9 @@ import datetime
 import qrcode
 from PIL import Image
 from typing import List
+import pydicom
+import numpy as np
+import io
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./medical_pacs.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
@@ -696,6 +699,19 @@ def technician_dashboard(request: Request, db: Session = Depends(get_db)):
     template = env.get_template("technician.html")
     return HTMLResponse(content=template.render(request=request, user=request.session["user"], records=records, success=request.query_params.get("success")))
 
+import datetime
+import io
+import os
+import traceback
+from typing import List
+import numpy as np
+import pydicom
+from PIL import Image
+import qrcode
+from fastapi import Request, Form, UploadFile, File, Depends, status
+from fastapi.responses import RedirectResponse, HTMLResponse
+from sqlalchemy.orm import Session
+
 @app.post("/technician/upload")
 async def technician_upload(
     request: Request,
@@ -708,7 +724,7 @@ async def technician_upload(
     user = request.session.get("user")
     if not user or user["role"] != "technician":
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-
+    
     try:
         os.makedirs("static/uploads", exist_ok=True)
         os.makedirs("static/qrs", exist_ok=True)
@@ -717,11 +733,34 @@ async def technician_upload(
         for file in files:
             if file.filename:
                 safe_filename = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename.replace(' ', '_')}"
-                final_file_path = f"static/uploads/{safe_filename}"
                 contents = await file.read()
-                with open(final_file_path, "wb") as f:
-                    f.write(contents)
-                saved_paths.append(f"/{final_file_path}")
+                
+                # التحقق مما إذا كان الملف بصيغة DICOM
+                if file.filename.lower().endswith('.dcm') or 'dicom' in file.content_type.lower():
+                    try:
+                        ds = pydicom.dcmread(io.BytesIO(contents))
+                        pixel_array = ds.pixel_array
+                        
+                        pixel_array = pixel_array.astype(float)
+                        if pixel_array.max() > 0:
+                            pixel_array = (pixel_array / pixel_array.max()) * 255.0
+                        pixel_array = np.uint8(pixel_array)
+                        
+                        img = Image.fromarray(pixel_array)
+                        png_filename = f"{safe_filename}.png"
+                        png_path = f"static/uploads/{png_filename}"
+                        img.save(png_path)
+                        saved_paths.append(f"/{png_path}")
+                    except Exception:
+                        fallback_path = f"static/uploads/{safe_filename}"
+                        with open(fallback_path, "wb") as f:
+                            f.write(contents)
+                        saved_paths.append(f"/{fallback_path}")
+                else:
+                    final_file_path = f"static/uploads/{safe_filename}"
+                    with open(final_file_path, "wb") as f:
+                        f.write(contents)
+                    saved_paths.append(f"/{final_file_path}")
 
         images_string = ",".join(saved_paths) if saved_paths else ""
 
